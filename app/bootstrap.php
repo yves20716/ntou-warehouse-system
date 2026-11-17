@@ -1,0 +1,138 @@
+<?php
+declare(strict_types=1);
+
+session_name('NTOU_WAREHOUSE_SID');
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path' => '/',
+    'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+    'httponly' => true,
+    'samesite' => 'Lax',
+]);
+ini_set('session.use_strict_mode', '1');
+session_start();
+header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+
+function db(): PDO
+{
+    static $connection;
+    if (!$connection) {
+        $host = getenv('DB_HOST') ?: '127.0.0.1';
+        $port = getenv('DB_PORT') ?: '3306';
+        $name = getenv('DB_NAME') ?: 'warehouse';
+        $connection = new PDO(
+            "mysql:host=$host;port=$port;dbname=$name;charset=utf8mb4",
+            getenv('DB_USER') ?: 'warehouse',
+            getenv('DB_PASSWORD') ?: '',
+            [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+            ]
+        );
+        $connection->exec("SET time_zone = '+08:00'");
+    }
+    return $connection;
+}
+
+function rows(string $sql, array $parameters = []): array
+{
+    $statement = db()->prepare($sql);
+    $statement->execute($parameters);
+    return $statement->fetchAll();
+}
+
+function h(mixed $value): string
+{
+    return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+function go(string $location): never
+{
+    header('Location: ' . $location, true, 303);
+    exit;
+}
+
+function current_user(): ?array
+{
+    if (!isset($_SESSION['user_id'])) {
+        return null;
+    }
+    return rows('SELECT u.id, u.username, u.role, u.client_id, u.employee_id,
+                        COALESCE(c.name, e.name) AS display_name
+                 FROM users u LEFT JOIN clients c ON c.id = u.client_id
+                 LEFT JOIN employees e ON e.id = u.employee_id WHERE u.id = ?', [$_SESSION['user_id']])[0] ?? null;
+}
+
+function require_role(string $role): array
+{
+    $user = current_user();
+    if (!$user) {
+        go('index.php');
+    }
+    if ($user['role'] !== $role) {
+        http_response_code(403);
+        exit('此帳號沒有操作權限。');
+    }
+    return $user;
+}
+
+function csrf_token(): string
+{
+    return $_SESSION['csrf'] ??= bin2hex(random_bytes(32));
+}
+
+function take_flash(): ?array
+{
+    $message = $_SESSION['flash'] ?? null;
+    unset($_SESSION['flash']);
+    return $message;
+}
+
+function flash(string $type, string $message): void
+{
+    $_SESSION['flash'] = ['type' => $type, 'message' => $message];
+}
+
+function input_text(string $key, string $label, int $max): string
+{
+    $value = $_POST[$key] ?? '';
+    if (!is_string($value)) {
+        throw new DomainException("請確認{$label}的格式。");
+    }
+    $value = trim($value);
+    if ($value === '' || !preg_match('/^.{1,' . $max . '}$/usD', $value)) {
+        throw new DomainException("{$label}須填寫 1 至 {$max} 個字元。");
+    }
+    return $value;
+}
+
+function input_id(string $key, string $label, bool $optional = false): ?int
+{
+    $value = $_POST[$key] ?? '';
+    if ($optional && $value === '') {
+        return null;
+    }
+    if (!is_string($value) || !ctype_digit($value) || (int)$value < 1 || (int)$value > 2147483647) {
+        throw new DomainException("請輸入有效的{$label}。");
+    }
+    return (int)$value;
+}
+
+function transaction(callable $operation): void
+{
+    $conn = db();
+    $conn->beginTransaction();
+    try {
+        $operation($conn);
+        $conn->commit();
+    } catch (Throwable $error) {
+        if ($conn->inTransaction()) {
+            $conn->rollBack();
+        }
+        throw $error;
+    }
+}
+
+require_once __DIR__ . '/queries.php';
