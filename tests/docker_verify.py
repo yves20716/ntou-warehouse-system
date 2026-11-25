@@ -1,5 +1,6 @@
 """Run the documented installation on a disposable GitHub-hosted Docker runner."""
 from pathlib import Path
+from backend_http import Page
 import hashlib
 import json
 import os
@@ -74,7 +75,11 @@ def wait_http(base, ca=None):
     for attempt in range(60):
         try:
             with opener.open(base + '/', timeout=3) as response:
-                assert response.status == 200 and '登入帳號' in response.read().decode()
+                assert response.status == 200
+                login = Page(response.read().decode(), base + '/').form('login')
+                assert login['action'] == 'actions.php'
+                assert {'username', 'password', 'csrf'} <= login['fields'].keys()
+                assert login['fields']['csrf'], 'Login form is missing its CSRF token.'
                 return opener
         except (URLError, TimeoutError, ConnectionError):
             time.sleep(1)
