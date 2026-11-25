@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 490" fill="none">
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse" patternTransform="matrix(1 .46 -1 .46 320 -30)"><path d="M32 0H0V32" stroke="#b9d4a1" stroke-opacity=".16" stroke-width=".8"/></pattern>
+    <g id="box"><path d="m0 15 30-15 30 15-30 15Z" fill="#cee99d"/><path d="M0 15v32l30 15V30Z" fill="#99b97f"/><path d="m30 30 30-15v32L30 62Z" fill="#668f72"/><path d="m23 4 30 15-8 4L15 8Z" fill="#e6efc9"/><path d="M45 23v15l8-4V19" fill="#b7cb98"/></g>
+  </defs>
+  <path fill="url(#grid)" d="M0 0h640v490H0z"/>
+  <g stroke="#bbd6a7" stroke-opacity=".6" stroke-width="1">
+    <path d="m75 237 275-138 228 114-275 138Z" fill="#23443e"/>
+    <path d="M75 237v16l228 114 275-138v-16M303 351v16"/>
+    <path d="m132 235 218-109 172 86-219 109Z" stroke-dasharray="4 6"/>
+  </g>
+  <g>
+    <path d="m180 150 161-81 158 79-161 81Z" fill="#d8e5c5"/>
+    <path d="M180 150v111l158 79V229Z" fill="#4a7162"/>
+    <path d="m338 229 161-81v111l-161 81Z" fill="#2a5549"/>
+    <path d="m180 150 79-73 82-8 158 79-161 81Z" stroke="#9bbc8a" stroke-width="2"/>
+    <path d="m259 77 158 79 82-8M417 156l-79 73" stroke="#6c9274" stroke-width="1.5"/>
+    <path d="m205 175 105 52v91l-105-53Z" fill="#193a33" stroke="#83a17d"/>
+    <path d="m210 191 95 47m-95-34 95 47m-95-34 95 47m-95-34 95 47m-95-34 95 47" stroke="#83a17d" stroke-opacity=".5"/>
+    <path d="m365 230 23-12v40l-23 12Zm43-21 23-12v40l-23 12Zm43-21 23-12v40l-23 12Z" fill="#a7c794" stroke="#b6cfa0"/>
+    <path d="M338 229v111" stroke="#a8c493"/>
+  </g>
+  <use href="#box" x="108" y="255"/><use href="#box" x="171" y="286"/>
+  <g stroke="#cee99d" stroke-width="2"><path d="m70 335 95 48 90-45" stroke-dasharray="5 7"/><path d="m245 338 10 0-2 10M403 336l110-54 60 30" stroke-dasharray="5 7"/><path d="m562 302 11 10-14 1"/></g>
+  <g fill="#cee99d"><circle cx="70" cy="335" r="4"/><circle cx="403" cy="336" r="4"/></g>
+  <g stroke="#9fbb94" stroke-opacity=".6"><path d="M341 69V30h105M499 213h86v-40M75 237H35v-44"/></g>
+  <g fill="#cee0c5" font-family="monospace" font-size="11" letter-spacing="2"><text x="451" y="34">NEXUS / 01</text><text x="526" y="166">STORAGE</text><text x="25" y="183">INBOUND</text><text x="474" y="359">OUTBOUND</text></g>
+  <path d="M25 20v16m-8-8h16M602 442v16m-8-8h16" stroke="#bdcda7"/>
+</svg>

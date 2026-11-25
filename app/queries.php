@@ -2,13 +2,17 @@
 declare(strict_types=1);
 
 /** Compose fixed predicates and bind all search terms as literal substrings. */
-function dashboard_rows(string $sql, string $order, string $q, array $columns, ?int $tenant = null): array
+function dashboard_rows(string $sql, string $order, string $q, array $columns, ?int $tenant = null, ?int $warehouseId = null): array
 {
     $conditions = [];
     $values = [];
     if ($tenant !== null) {
         $conditions[] = 'c.id = ?';
         $values[] = $tenant;
+    }
+    if ($warehouseId !== null) {
+        $conditions[] = 'w.id = ?';
+        $values[] = $warehouseId;
     }
     if ($q !== '') {
         $conditions[] = '(' . implode(' OR ', array_map(static fn($column) => "$column LIKE ? ESCAPE '!'", $columns)) . ')';
@@ -19,7 +23,7 @@ function dashboard_rows(string $sql, string $order, string $q, array $columns, ?
     return rows($sql . $where . ' ORDER BY ' . $order, $values);
 }
 
-function dashboard_data(string $q = ''): array
+function dashboard_data(string $q = '', ?int $warehouseId = null): array
 {
     $user = current_user();
     if (!$user) {
@@ -45,16 +49,16 @@ function dashboard_data(string $q = ''): array
               JOIN sections s ON s.id = i.section_id JOIN warehouses w ON w.id = s.warehouse_id ';
     $data['inventory'] = dashboard_rows(
         "SELECT i.id, g.id AS goods_id, g.name AS goods_name, c.name AS client_name, g.unit,
-                w.name AS warehouse_name, s.id AS section_id, s.name AS section_name, i.quantity,
+                w.id AS warehouse_id, w.name AS warehouse_name, s.id AS section_id, s.name AS section_name, i.quantity,
                 i.arrival_date, IF(i.quantity > 0, 'in_stock', 'depleted') AS status
          FROM inventory i" . $lots,
-        'i.id DESC', $q, ['i.id', 'g.name', 'c.name', 's.name', 'w.name'], $tenant
+        'i.id DESC', $q, ["CONCAT('#', i.id)", 'g.name', 'c.name', 's.name', 'w.name'], $tenant, $warehouseId
     );
     $data['movements'] = dashboard_rows(
         'SELECT m.id, m.stock_id, g.name AS goods_name, c.name AS client_name, s.name AS section_name,
                 w.name AS warehouse_name, g.unit, m.type, m.quantity, m.moved_at, e.name AS employee_name
          FROM movements m JOIN inventory i ON i.id = m.stock_id' . $lots . 'JOIN employees e ON m.employee_id = e.id',
-        'm.moved_at DESC, m.id DESC', $q, ['m.id', 'm.stock_id', 'g.name', 'c.name', 's.name', 'w.name'], $tenant
+        'm.moved_at DESC, m.id DESC', $q, ['m.id', "CONCAT('#', m.stock_id)", 'g.name', 'c.name', 's.name', 'w.name'], $tenant
     );
     if ($user['role'] === 'employee') {
         $data['clients'] = rows('SELECT id, name FROM clients ORDER BY name');

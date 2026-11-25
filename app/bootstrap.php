@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-session_name('NTOU_WAREHOUSE_SID');
+session_name(getenv('WAREHOUSE_SESSION_NAME') ?: 'NTOU_WAREHOUSE_SID');
 session_set_cookie_params([
     'lifetime' => 0,
     'path' => '/',
@@ -83,6 +83,58 @@ function csrf_token(): string
     return $_SESSION['csrf'] ??= bin2hex(random_bytes(32));
 }
 
+function mutation_token(string $action): string
+{
+    $tokens = $_SESSION['mutation_tokens'] ?? [];
+    // Keep separately opened forms usable without allowing the session to grow indefinitely.
+    if (count($tokens) >= 1024) {
+        $tokens = array_slice($tokens, -1023, null, true);
+    }
+    $token = bin2hex(random_bytes(32));
+    $tokens[$token] = $action;
+    $_SESSION['mutation_tokens'] = $tokens;
+    return $token;
+}
+
+function require_mutation_token(string $action): string
+{
+    $token = $_POST['mutation_token'] ?? null;
+    if (!is_string($token) || ($_SESSION['mutation_tokens'][$token] ?? null) !== $action) {
+        throw new DomainException('這張表單已送出或失效，請先確認結果，再重新操作。');
+    }
+    return $token;
+}
+
+function remember_form_input(string $action): void
+{
+    $fields = match ($action) {
+        'goods_save' => ['id', 'client_id', 'name', 'unit'],
+        'employee_save' => ['id', 'name', 'job_title', 'hourly_rate', 'manager_id', 'birth_date', 'overtime_hours', 'insurer'],
+        'stock_in' => ['goods_id', 'section_id', 'quantity'],
+        'stock_out' => ['stock_id', 'quantity'],
+        default => [],
+    };
+    $values = [];
+    foreach ($fields as $field) {
+        if (isset($_POST[$field]) && is_string($_POST[$field])) {
+            $values[$field] = $_POST[$field];
+        }
+    }
+    if ($values) {
+        $_SESSION['form_input'] = ['action' => $action, 'values' => $values];
+    }
+}
+
+function take_form_input(string $action): array
+{
+    if (($_SESSION['form_input']['action'] ?? null) !== $action) {
+        return [];
+    }
+    $values = $_SESSION['form_input']['values'];
+    unset($_SESSION['form_input']);
+    return $values;
+}
+
 function take_flash(): ?array
 {
     $message = $_SESSION['flash'] ?? null;
@@ -120,13 +172,14 @@ function input_id(string $key, string $label, bool $optional = false): ?int
     return (int)$value;
 }
 
-function transaction(callable $operation): void
+function transaction(callable $operation): mixed
 {
     $conn = db();
     $conn->beginTransaction();
     try {
-        $operation($conn);
+        $result = $operation($conn);
         $conn->commit();
+        return $result;
     } catch (Throwable $error) {
         if ($conn->inTransaction()) {
             $conn->rollBack();

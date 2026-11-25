@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-function save_goods(): void
+function save_goods(): string
 {
     $id = input_id('id', '貨物編號', true);
     $client = input_id('client_id', '客戶');
@@ -22,9 +22,10 @@ function save_goods(): void
         }
         $conn->prepare('UPDATE goods SET client_id = ?, name = ?, unit = ? WHERE id = ?')->execute([$client, $name, $unit, $id]);
     });
+    return $id === null ? "已新增貨物「{$name}」。" : "已更新「{$name}」的貨物資料。";
 }
 
-function delete_record(string $table): void
+function delete_record(string $table): string
 {
     $id = input_id('id', '編號');
     $sql = match ($table) {
@@ -36,6 +37,7 @@ function delete_record(string $table): void
     if ($statement->rowCount() === 0) {
         throw new DomainException('這筆資料已不存在。');
     }
+    return $table === 'goods' ? '已刪除貨物。' : '已刪除員工資料。';
 }
 
 function decimal_input(string $key, string $label, int $wholeDigits, ?string $default = null): string
@@ -47,7 +49,7 @@ function decimal_input(string $key, string $label, int $wholeDigits, ?string $de
     return $value;
 }
 
-function save_employee(): void
+function save_employee(): string
 {
     $id = input_id('id', '員工編號', true);
     $manager = input_id('manager_id', '主管', true);
@@ -55,7 +57,11 @@ function save_employee(): void
     $job = input_text('job_title', '職務', 80);
     $rate = decimal_input('hourly_rate', '時薪', 6);
     $overtime = decimal_input('overtime_hours', '加班時數', 4, '0');
-    $insurer = empty($_POST['insurer']) ? null : input_text('insurer', '保險公司', 100);
+    $insurer = $_POST['insurer'] ?? '';
+    if (!is_string($insurer)) {
+        throw new DomainException('請確認保險公司的格式。');
+    }
+    $insurer = trim($insurer) === '' ? null : input_text('insurer', '保險公司', 100);
     $birth = $_POST['birth_date'] ?? '';
     if ($birth !== '') {
         if (!is_string($birth) || !preg_match('/^\d{4}-\d{2}-\d{2}$/D', $birth)) {
@@ -93,15 +99,16 @@ function save_employee(): void
                             WHERE id=?')->execute($values);
         }
     });
+    return $id === null ? "已將{$name}加入員工名冊。" : "已更新{$name}的員工資料。";
 }
 
-function stock_in(int $employee): void
+function stock_in(int $employee): string
 {
     $goodsId = input_id('goods_id', '貨物');
     $sectionId = input_id('section_id', '儲區');
     $quantity = input_id('quantity', '入庫數量');
-    transaction(function (PDO $conn) use ($goodsId, $sectionId, $quantity, $employee) {
-        $item = rows('SELECT client_id FROM goods WHERE id = ? FOR UPDATE', [$goodsId])[0] ?? null;
+    return transaction(function (PDO $conn) use ($goodsId, $sectionId, $quantity, $employee): string {
+        $item = rows('SELECT client_id, unit FROM goods WHERE id = ? FOR UPDATE', [$goodsId])[0] ?? null;
         $section = rows('SELECT client_id FROM sections WHERE id = ? FOR UPDATE', [$sectionId])[0] ?? null;
         if (!$item || !$section || (int)$item['client_id'] !== (int)$section['client_id']) {
             throw new DomainException('請選擇貨物所屬客戶承租的儲區。');
@@ -111,20 +118,27 @@ function stock_in(int $employee): void
         $stockId = (int)$conn->lastInsertId();
         $conn->prepare("INSERT INTO movements (stock_id, type, quantity, employee_id)
                         VALUES (?, 'in', ?, ?)")->execute([$stockId, $quantity, $employee]);
+        return sprintf('已入庫 %s %s，批號 #%d。', number_format($quantity), $item['unit'], $stockId);
     });
 }
 
-function stock_out(int $employee): void
+function stock_out(int $employee): string
 {
     $stockId = input_id('stock_id', '庫存批次');
     $quantity = input_id('quantity', '出庫數量');
-    transaction(function (PDO $conn) use ($stockId, $quantity, $employee) {
-        $stock = rows('SELECT quantity FROM inventory WHERE id = ? FOR UPDATE', [$stockId])[0] ?? null;
-        if (!$stock || (int)$stock['quantity'] < $quantity) {
-            throw new DomainException('找不到批次或可出庫數量不足。');
+    return transaction(function (PDO $conn) use ($stockId, $quantity, $employee): string {
+        $stock = rows('SELECT i.quantity, g.unit FROM inventory i JOIN goods g ON g.id = i.goods_id
+                       WHERE i.id = ? FOR UPDATE OF i', [$stockId])[0] ?? null;
+        if (!$stock) {
+            throw new DomainException('找不到這個庫存批次，請重新選擇。');
+        }
+        $remaining = (int)$stock['quantity'] - $quantity;
+        if ($remaining < 0) {
+            throw new DomainException(sprintf('批號 #%d 只剩 %s %s，請調整出庫數量。', $stockId, number_format((int)$stock['quantity']), $stock['unit']));
         }
         $conn->prepare('UPDATE inventory SET quantity = quantity - ? WHERE id = ?')->execute([$quantity, $stockId]);
         $conn->prepare("INSERT INTO movements (stock_id, type, quantity, employee_id)
                         VALUES (?, 'out', ?, ?)")->execute([$stockId, $quantity, $employee]);
+        return sprintf('已出庫 %s %s，批號 #%d 剩餘 %s %s。', number_format($quantity), $stock['unit'], $stockId, number_format($remaining), $stock['unit']);
     });
 }

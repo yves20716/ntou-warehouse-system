@@ -35,20 +35,27 @@ try {
     }
 
     $routes = [
-        'goods_save' => ['employee', 'employee.php?view=goods', '已儲存貨物資料。'],
-        'goods_delete' => ['employee', 'employee.php?view=goods', '已刪除貨物。'],
-        'stock_in' => ['employee', 'employee.php?view=inventory', '入庫完成，已建立新批次及異動紀錄。'],
-        'stock_out' => ['employee', 'employee.php?view=inventory', '出庫完成，已更新批次餘量。'],
-        'employee_save' => ['hr', 'hr.php?view=staff', '已儲存員工資料。'],
-        'employee_delete' => ['hr', 'hr.php?view=staff', '已刪除員工資料。'],
+        'goods_save' => ['employee', 'employee.php?view=goods'],
+        'goods_delete' => ['employee', 'employee.php?view=goods'],
+        'stock_in' => ['employee', 'employee.php?view=inventory'],
+        'stock_out' => ['employee', 'employee.php?view=inventory'],
+        'employee_save' => ['hr', 'hr.php?view=staff'],
+        'employee_delete' => ['hr', 'hr.php?view=staff'],
     ];
     if (!isset($routes[$action])) {
         http_response_code(400);
         exit('無法辨識操作。');
     }
-    [$role, $destination, $message] = $routes[$action];
+    [$role, $destination] = $routes[$action];
     $user = require_role($role);
-    match ($action) {
+    if (in_array($action, ['goods_save', 'employee_save'], true)) {
+        $id = $_POST['id'] ?? '';
+        if (is_string($id) && ctype_digit($id) && (int)$id >= 1 && (int)$id <= 2147483647) {
+            $destination .= '&edit=' . (int)$id;
+        }
+    }
+    $token = require_mutation_token($action);
+    $message = match ($action) {
         'goods_save' => save_goods(),
         'goods_delete' => delete_record('goods'),
         'stock_in' => stock_in((int)$user['employee_id']),
@@ -56,15 +63,20 @@ try {
         'employee_save' => save_employee(),
         'employee_delete' => delete_record('employees'),
     };
+    // PHP holds the session lock until this request finishes, including the database commit.
+    unset($_SESSION['mutation_tokens'][$token], $_SESSION['form_input']);
+    $destination = $routes[$action][1];
     flash('success', $message);
 } catch (DomainException $error) {
+    remember_form_input($action);
     flash('error', $error->getMessage());
 } catch (PDOException $error) {
+    remember_form_input($action);
     $code = (int)($error->errorInfo[1] ?? 0);
     $message = match ($code) {
-        1062 => '相同資料已經存在，請確認名稱。',
-        1451 => '這筆資料有關聯紀錄，請保留原有資料。',
-        1452 => '關聯資料已變更，請重新整理後再試。',
+        1062 => $action === 'goods_save' ? '這位客戶已有同名貨物，請確認貨名。' : '這筆資料已經存在，請重新確認。',
+        1217, 1451 => $action === 'goods_delete' ? '這項貨物已有入庫紀錄，無法刪除。' : '這位員工仍有部屬、登入帳號或經手的進出貨紀錄，無法刪除。',
+        1216, 1452 => '選取的資料已不存在，請重新整理後再選一次。',
         1205, 1213 => '其他人正在更新資料，請重新整理後再試。',
         default => '目前無法完成操作，請稍後再試。',
     };
