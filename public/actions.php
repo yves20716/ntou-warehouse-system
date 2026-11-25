@@ -25,7 +25,7 @@ try {
             throw new DomainException('帳號或密碼有誤。');
         }
         session_regenerate_id(true);
-        $_SESSION = ['user_id' => $account['id']];
+        $_SESSION = ['user_id' => $account['id'], 'auth_version' => hash('sha256', $account['password_hash'])];
         go($account['role'] . '.php');
     }
     if ($action === 'logout') {

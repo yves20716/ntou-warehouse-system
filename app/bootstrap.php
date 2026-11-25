@@ -5,7 +5,9 @@ session_name(getenv('WAREHOUSE_SESSION_NAME') ?: 'NTOU_WAREHOUSE_SID');
 session_set_cookie_params([
     'lifetime' => 0,
     'path' => '/',
-    'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+    // HTTPS terminates at the production proxy; only deployment configuration can opt in.
+    'secure' => getenv('WAREHOUSE_COOKIE_SECURE') === '1'
+        || (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
     'httponly' => true,
     'samesite' => 'Lax',
 ]);
@@ -59,10 +61,16 @@ function current_user(): ?array
     if (!isset($_SESSION['user_id'])) {
         return null;
     }
-    return rows('SELECT u.id, u.username, u.role, u.client_id, u.employee_id,
+    $user = rows('SELECT u.id, u.username, u.role, u.client_id, u.employee_id, u.password_hash,
                         COALESCE(c.name, e.name) AS display_name
                  FROM users u LEFT JOIN clients c ON c.id = u.client_id
                  LEFT JOIN employees e ON e.id = u.employee_id WHERE u.id = ?', [$_SESSION['user_id']])[0] ?? null;
+    if (!$user || !hash_equals(hash('sha256', $user['password_hash']), $_SESSION['auth_version'] ?? '')) {
+        $_SESSION = [];
+        return null;
+    }
+    unset($user['password_hash']);
+    return $user;
 }
 
 function require_role(string $role): array

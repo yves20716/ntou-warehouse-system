@@ -2,15 +2,29 @@
 
 海大資料庫系統期末專題。一間倉儲公司替不同客戶保管貨物。倉儲員工登記每批貨存放的儲區及進出數量，客戶可以替自己的貨物建檔、提出入庫或出庫申請，並查看處理進度；倉儲人員確認實際收發後才更新庫存。人資使用獨立頁面維護員工資料。
 
+| 想做的事 | 從這裡開始 |
+| --- | --- |
+| 在自己的電腦試用 | 下方「在本機啟動」 |
+| 了解客戶、倉儲與人資怎麼操作 | [完整使用流程](docs/USAGE.md) |
+| 在自己的網域提供共用服務 | [網路部署、建帳號與備份](docs/DEPLOYMENT.md) |
+| 檢查程式與資料庫 | [回歸測試](tests/README.md) |
+
+這是可自行架設的 PHP／MySQL 專案。各人的本機版會建立獨立資料庫；若要共同操作同一批庫存，請部署共用的 HTTPS 網站。GitHub 提供程式與初始化資料，不是即時資料庫服務。
+
 ## 在本機啟動
 
-安裝 Docker 與 Docker Compose 後，在專案目錄執行
+先準備 Git、Docker 與 Docker Compose，確認 Docker 已啟動。macOS、Windows 可使用 Docker Desktop，Linux 可使用 Docker Engine 加 Compose。取得專案後執行：
 
 ```sh
+git clone https://github.com/yves20716/ntou-warehouse-system.git
+cd ntou-warehouse-system
 docker compose up --build -d
+docker compose ps
 ```
 
-開啟 [本機網站](http://127.0.0.1:8080)。第一次啟動時，MySQL 會在新的資料卷建表並載入示範資料。若 8080 已有其他服務，可用 `WAREHOUSE_PORT=8081 docker compose up --build -d`，再開啟 8081。執行 `docker compose stop` 可關閉服務並保留資料。
+在執行上述指令的電腦開啟 `http://localhost:8080`。這是每位使用者自己的本機入口，不是作者電腦的網址。第一次啟動時，MySQL 會在新的資料卷建表並載入示範資料。
+
+若 8080 已被占用，在專案根目錄的 `.env` 寫入 `WAREHOUSE_PORT=8081`，再執行相同指令，網址改成 `http://localhost:8081`。`.env` 不會提交到 Git。執行 `docker compose stop` 可關閉服務，`docker compose up -d` 可再次開啟，原資料會保留。
 
 四組示範帳號的密碼都是 `WarehouseDemo!26`。資料庫裡的人名、公司與貨物僅供本機展示。
 
@@ -73,7 +87,7 @@ php -S 127.0.0.1:8080 -t public
 若先前已啟動過舊版，保留原資料卷，套用這次新增申請表的 migration；不要重新匯入 seed。
 
 ```sh
-docker compose exec -T db sh -c 'exec mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' < database/migrations/20261126-stock-requests.sql
+docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysql -u"$MYSQL_USER" "$MYSQL_DATABASE"' < database/migrations/20261126-stock-requests.sql
 ```
 
 使用自行安裝的 MySQL 時：
@@ -83,3 +97,12 @@ mysql -u root -p warehouse < database/migrations/20261126-stock-requests.sql
 ```
 
 首次啟動的空資料庫已包含這張表。各組員的本機資料庫彼此獨立；下載程式不會取得其他人的操作紀錄。GitHub 僅包含程式、建表檔與虛構的示範資料，不包含本機帳密設定或含組員個資的報告。
+
+## 啟動時遇到問題
+
+- 網頁連不上：先執行 `docker compose ps` 確認 `db` 已 healthy、`web` 已啟動，再用 `docker compose logs --tail=50 web db` 查看錯誤。首次下載映像與初始化需要一些時間。
+- 登入失敗：公開 seed 的密碼是 `WarehouseDemo!26`；已有資料卷會沿用舊資料，不會在更新程式時重設帳密。
+- 換了程式卻沒有新表：依上方 migration 更新；不要重新匯入 seed 或刪掉既有資料卷。
+- 想從另一台電腦使用：本機版只綁定 loopback，不是共用服務。請依 [HTTPS 部署流程](docs/DEPLOYMENT.md) 架設，再提供自己的網域。
+
+目前工作環境未安裝 Docker；PHP／MySQL 操作已做獨立測試，容器設定與文件已檢查，但仍需在實際 Docker 主機完成啟動驗證。

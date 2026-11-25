@@ -1,0 +1,57 @@
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: warehouse
+      MYSQL_USER: warehouse
+      MYSQL_PASSWORD: ${WAREHOUSE_DB_PASSWORD:?Set WAREHOUSE_DB_PASSWORD in .env.production}
+      MYSQL_ROOT_PASSWORD: ${WAREHOUSE_ROOT_PASSWORD:?Set WAREHOUSE_ROOT_PASSWORD in .env.production}
+    volumes:
+      - production-db:/var/lib/mysql
+      # Production starts empty, with no public demonstration accounts.
+      - ./database/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks: [database]
+    healthcheck:
+      test: ["CMD-SHELL", 'MYSQL_PWD="$$MYSQL_PASSWORD" mysql --protocol=TCP -h127.0.0.1 -u"$$MYSQL_USER" "$$MYSQL_DATABASE" -e "SELECT 1 FROM users LIMIT 1"']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: warehouse
+      DB_USER: warehouse
+      DB_PASSWORD: ${WAREHOUSE_DB_PASSWORD:?Set WAREHOUSE_DB_PASSWORD in .env.production}
+      WAREHOUSE_COOKIE_SECURE: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [database, frontend]
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      WAREHOUSE_DOMAIN: ${WAREHOUSE_DOMAIN:?Set WAREHOUSE_DOMAIN in .env.production}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [web]
+    networks: [frontend]
+networks:
+  database:
+    internal: true
+  frontend:
+volumes:
+  production-db:
+  caddy-data:
+  caddy-config:

@@ -16,6 +16,7 @@ php tests/backend_db.php
 php tests/dashboard_db.php
 php tests/requests_db.php
 python3 tests/requests_http.py http://127.0.0.1:18767
+python3 tests/deployment_http.py http://127.0.0.1:18767
 ```
 
 - `backend_http.py`：檢查登入權限、客戶資料隔離、表單重送、欄位驗證、錯誤後保留輸入及主管關係。使用種子資料中的示範帳號。
@@ -23,6 +24,7 @@ python3 tests/requests_http.py http://127.0.0.1:18767
 - `dashboard_db.php`：檢查倉庫精確篩選、相似名稱、數字名稱及客戶可見範圍。
 - `requests_db.php`：檢查客戶收發申請的歸屬、取消、未受理原因、交易回復及兩個程序同時處理申請。
 - `requests_http.py`：檢查申請表單的角色限制、CSRF、重送保護及客戶之間的資料隔離。
+- `deployment_http.py`：檢查 CLI 建立三種登入帳號、拒絕重複或無效關聯，以及改密碼後舊登入狀態是否失效。使用獨立隨機密碼，在 QA 留下有識別碼的帳號；最後一個可選參數可指定 PHP 執行檔。
 
 除了 `dashboard_db.php` 會回復整筆測試交易，其餘測試會在 QA 資料庫留下有識別碼的資料，方便查驗。PHP 測試會拒絕連線至名稱不是 `warehouse_qa` 的資料庫，HTTP 測試只接受本機的 18767 連接埠。
 

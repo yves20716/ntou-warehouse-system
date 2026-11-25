@@ -1,0 +1,17 @@
+-- Copy to .local/business-setup.sql and replace these examples with your own data.
+-- Run once on the empty production database, before creating login accounts.
+SET NAMES utf8mb4;
+START TRANSACTION;
+INSERT INTO clients (name, contact_person) VALUES ('請填客戶公司名稱', '請填聯絡人');
+SET @client_id = LAST_INSERT_ID();
+INSERT INTO warehouses (name, address) VALUES ('請填倉庫名稱', '請填倉庫地址');
+SET @warehouse_id = LAST_INSERT_ID();
+INSERT INTO sections (warehouse_id, client_id, name, capacity)
+VALUES (@warehouse_id, @client_id, 'A-01', 400);
+INSERT INTO employees (name, job_title, hourly_rate) VALUES ('請填人資姓名', '人資', 0);
+SET @hr_id = LAST_INSERT_ID();
+INSERT INTO employees (name, job_title, hourly_rate, manager_id)
+VALUES ('請填倉儲員工姓名', '倉儲人員', 0, @hr_id);
+SET @employee_id = LAST_INSERT_ID();
+COMMIT;
+SELECT @client_id AS client_id, @hr_id AS hr_employee_id, @employee_id AS store_employee_id;
