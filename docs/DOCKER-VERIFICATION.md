@@ -1,6 +1,6 @@
 # Docker 驗證紀錄
 
-2026-11-26（台灣時間）已在兩台乾淨的 GitHub Actions 主機完成實測，兩種架構都通過。本次從公開儲存庫取得 `afaa2877ee51a1ccb5f144348d07125582551915`，使用新的資料卷建置，沒有沿用開發者電腦的資料庫、設定或登入狀態。
+2026-11-26（台灣時間）於 GitHub Actions 的 amd64、arm64 主機完成 Docker 測試，兩種架構均通過。測試版本為 `afaa2877ee51a1ccb5f144348d07125582551915`，使用獨立環境與全新資料卷。
 
 [完整執行紀錄](https://github.com/yves20716/ntou-warehouse-system/actions/runs/45702515415)
 
@@ -9,11 +9,11 @@
 | Ubuntu 24.04 amd64 | 28.0.4 | 2.38.2 | 通過 |
 | Ubuntu 24.04 arm64 | 28.0.4 | 2.38.2 | 通過 |
 
-執行紀錄保留本次下載的映像標籤與 digest。專案使用的 `php:8.4-cli`、`php:8.4-apache`、`mysql:8.4`、`caddy:2-alpine` 會有後續更新，更新映像後可以重新跑同一套驗證。
+執行紀錄包含映像標籤與 digest。專案使用 `php:8.4-cli`、`php:8.4-apache`、`mysql:8.4`、`caddy:2-alpine`；映像更新後應重新執行驗證。
 
 ## 本機示範版
 
-依 README 建置及啟動 `compose.yaml`，自動化指令只另外加上 `--wait`，等待容器可用後才測試。
+依 README 建置並啟動 `compose.yaml`。自動化指令加上 `--wait`，待容器就緒後執行測試。
 
 | 檢查 | 實際結果 |
 | --- | --- |
@@ -31,20 +31,20 @@
 
 ## HTTPS 部署版
 
-使用 `bin/production.sh` 與 `compose.production.yaml`。本次測試網域設為 `localhost`，由 Caddy 產生本機 CA；測試程式指定這張 CA 驗證憑證與主機名稱，沒有略過 TLS 驗證。
+使用 `bin/production.sh` 與 `compose.production.yaml`，測試網域設為 `localhost`。Caddy 產生本機 CA，測試程式以該 CA 驗證 TLS 憑證與主機名稱。
 
-- 初始化只有 schema，九張表全空，不會建立公開的示範帳號。
-- 依部署文件套用基本資料範本，再由 CLI 建立四個測試帳號。密碼現場隨機產生，未寫進儲存庫。
+- 初始化建立九張空資料表，示範資料與帳號皆未載入。
+- 依部署文件匯入基本資料範本，由 CLI 建立四個測試帳號；密碼隨機產生並僅供該次測試使用。
 - 網站資料庫帳號降為 SELECT、INSERT、UPDATE、DELETE；實際嘗試建表會被拒絕。
 - Apache 正常提供網站，HTTP 會轉到 HTTPS，登入 Cookie 有 Secure 屬性；設定檔、應用程式與 SQL 路徑回傳 404。
-- 以新帳號重跑上述收發、權限、人資與重啟檢查，全部通過。
+- 新帳號通過收發、權限、人資及重啟檢查。
 - 依文件執行 `mysqldump`，另外寫入一筆測試資料，再還原備份；還原後九表雜湊與備份前一致，網站也能重新登入查詢。
 - 另外建立舊版八表資料庫，套用申請表 migration 兩次；結果為九張表，原有 6 筆進出貨與庫存總量 158 都保留。
 
-這次沒有發現需要修改網站程式或 Docker 設定的問題，補上了原本不足的操作驗證與文件紀錄。測試資料只存在於這次的獨立 runner；沒有讀取或修改開發者平常使用的資料庫。
-
-## 組員如何重跑
+## 重新執行測試
 
 開啟 [Actions 頁面](https://github.com/yves20716/ntou-warehouse-system/actions/workflows/demo.yml)，選 **Run workflow**。有程式或設定變更時也會自動執行；只有 Markdown 文件修改時略過。
 
-要自己試用，依 [README](../README.md) 的安裝步驟即可。要共用一個線上資料庫，依 [部署文件](DEPLOYMENT.md) 設定自己的主機與網域。本次已驗證 Linux 容器在 amd64／arm64 的行為，沒有逐一測試 Windows／macOS 的 Docker Desktop 安裝介面，也沒有替任何公開網域完成 DNS 或憑證簽發。
+測試範圍為 Linux amd64／arm64 容器。Windows／macOS 的 Docker Desktop 安裝、公開網域 DNS 設定與憑證簽發尚未驗證。
+
+本機安裝步驟見 [README](../README.md)；主機與網域設定見 [部署文件](DEPLOYMENT.md)。

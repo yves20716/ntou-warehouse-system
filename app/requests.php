@@ -73,5 +73,5 @@ function reject_stock_request(int $employee): string
         $conn->prepare("UPDATE stock_requests SET status = 'rejected', handled_at = CURRENT_TIMESTAMP,
                        employee_id = ?, response_note = ? WHERE id = ?")->execute([$employee, $note, $id]);
     });
-    return "已將申請 #{$id} 標記為未受理，客戶可查看原因。";
+    return "申請 #{$id} 已回覆不受理。";
 }

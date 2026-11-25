@@ -120,7 +120,7 @@ function ui_no_records(string $message): void { ?>
 <?php }
 
 function ui_inventory(array $rows, bool $showClient, string $q = ''): void {
-    if (!$rows) { ui_no_records($q === '' ? '還沒有入庫批次。' : '找不到符合條件的批次，請換個關鍵字。'); return; }
+    if (!$rows) { ui_no_records($q === '' ? '尚無入庫批次。' : '找不到符合條件的批次。'); return; }
     $onInventory = ui_text('view') === 'inventory'; ?>
     <div class="table-scroll" tabindex="0" role="region" aria-label="庫存批次"><table class="inventory-table">
     <thead><tr><th scope="col">貨物／批次</th><th scope="col">存放位置</th><th scope="col">剩餘數量</th><th scope="col">到倉日</th><th scope="col">操作</th></tr></thead>
@@ -138,7 +138,7 @@ function ui_inventory(array $rows, bool $showClient, string $q = ''): void {
 <?php }
 
 function ui_movements(array $rows, bool $showClient, string $q = ''): void {
-    if (!$rows) { ui_no_records($q === '' ? '目前還沒有進出貨紀錄。' : '找不到符合搜尋條件的進出貨紀錄。'); return; } ?>
+    if (!$rows) { ui_no_records($q === '' ? '尚無進出貨紀錄。' : '找不到符合搜尋條件的進出貨紀錄。'); return; } ?>
     <div class="table-scroll" tabindex="0" role="region" aria-label="進出貨明細"><table><thead><tr>
     <th scope="col">時間</th><th scope="col">作業</th><th scope="col">貨物／批號</th><?php if ($showClient): ?><th scope="col">客戶</th><?php endif; ?><th scope="col">倉庫／儲區</th><th scope="col">數量</th><?php if ($showClient): ?><th scope="col">承辦員工</th><?php endif; ?>
     </tr></thead><tbody>

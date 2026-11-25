@@ -89,7 +89,7 @@ try {
         1062 => in_array($action, ['goods_save', 'client_goods_save'], true) ? '這位客戶已有同名貨物，請確認貨名。' : '這筆資料已經存在，請重新確認。',
         1217, 1451 => $action === 'goods_delete' ? '這項貨物已有入庫紀錄或收發申請，無法刪除。' : '這位員工仍有部屬、登入帳號、收發申請或進出貨紀錄，無法刪除。',
         1216, 1452 => '選取的資料已不存在，請重新整理後再選一次。',
-        1205, 1213 => '其他人正在更新資料，請重新整理後再試。',
+        1205, 1213 => '資料更新發生衝突，請重新整理後再試。',
         default => '目前無法完成操作，請稍後再試。',
     };
     error_log('Warehouse operation failed. SQLSTATE=' . $error->getCode() . ' driver=' . $code);

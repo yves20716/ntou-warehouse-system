@@ -6,7 +6,7 @@
 
 檢查內容包括空資料卷建表、示範資料筆數、四個帳號登入、客戶申請入庫 10／倉儲確認、出庫 3 後餘量為 7、取消及未受理、客戶隔離、人資新增修改刪除，以及關閉再啟動後資料是否完整保留。正式部署版另外測 Apache、Caddy 本機 HTTPS 憑證、Secure Cookie、私人檔案無法存取、CLI 建帳號、限制資料庫權限、備份還原及舊版 migration。
 
-`docker_verify.py` 負責啟動與檢查容器，僅允許在可拋棄的 GitHub Actions 主機上執行。`docker_smoke.py` 則透過實際 HTTP 表單測試操作；它會新增有識別碼的貨物、申請、批次與紀錄，**只在另外建立的測試環境使用**。
+`docker_verify.py` 負責啟動與檢查容器，僅允許在測試結束後銷毀的 GitHub Actions 主機上執行。`docker_smoke.py` 透過 HTTP 表單測試操作，會新增有識別碼的貨物、申請、批次與紀錄，須使用獨立測試環境。
 
 ```sh
 mkdir -p .local
@@ -15,11 +15,11 @@ python3 tests/docker_smoke.py --base http://127.0.0.1:8080 --mode seeded --outpu
 python3 tests/docker_smoke.py --base http://127.0.0.1:8080 --mode seeded --output .local/docker-seeded.json --verify-only
 ```
 
-正式部署測試使用 `https://localhost` 和 Caddy 的本機 CA，驗證過程不關閉憑證檢查。這能測試容器的 HTTPS 設定；自己的公開網域仍須完成 DNS、80／443 連通與公開憑證簽發。
+HTTPS 測試使用 `https://localhost` 與 Caddy 本機 CA，全程啟用憑證檢查。公開網域部署須另外確認 DNS、TCP 80／443 對外連線及公開憑證簽發。
 
 ## 獨立 PHP／MySQL 測試
 
-請另建 `warehouse_qa` 資料庫，匯入 `database/01-schema.sql` 和 `database/02-seed.sql`，並使用只具該資料庫權限的帳號。不要連到平常展示或使用中的資料庫。
+建立獨立的 `warehouse_qa` 資料庫，匯入 `database/01-schema.sql` 與 `database/02-seed.sql`，並使用僅具該資料庫權限的帳號。測試資料庫須與展示及正式環境分開。
 
 依主 README 設定資料庫環境變數，將 `DB_NAME` 設為 `warehouse_qa`、`DB_HOST` 設為 `127.0.0.1`，再啟動獨立的測試網站：
 
@@ -45,14 +45,14 @@ python3 tests/deployment_http.py http://127.0.0.1:18767
 - `requests_http.py`：檢查申請表單的角色限制、CSRF、重送保護及客戶之間的資料隔離。
 - `deployment_http.py`：檢查 CLI 建立三種登入帳號、拒絕重複或無效關聯，以及改密碼後舊登入狀態是否失效。使用獨立隨機密碼，在 QA 留下有識別碼的帳號；最後一個可選參數可指定 PHP 執行檔。
 
-除了 `dashboard_db.php` 會回復整筆測試交易，其餘測試會在 QA 資料庫留下有識別碼的資料，方便查驗。PHP 測試會拒絕連線至名稱不是 `warehouse_qa` 的資料庫，HTTP 測試只接受本機的 18767 連接埠。
+`dashboard_db.php` 會回復整筆測試交易，其餘測試會在 QA 資料庫保留有識別碼的資料。PHP 測試僅接受名稱為 `warehouse_qa` 的資料庫，HTTP 測試僅接受本機的 18767 連接埠。
 
 既有 QA 資料庫須先由具建表權限的管理帳號執行 `database/migrations/20261126-stock-requests.sql`；測試網站仍使用只具 QA 資料庫讀寫權限的帳號。
 
-不需資料庫的表單回歸檢查：
+表單代碼檢查可直接執行，無須連線至資料庫：
 
 ```sh
 php tests/form_tokens.php
 ```
 
-這項檢查渲染 513 筆待處理申請，確認頁面前後的操作代碼仍有效，不會因產生太多表單而提早失效。
+`form_tokens.php` 會產生含 513 筆待處理申請的頁面，確認第一筆至最後一筆表單的操作代碼皆有效。
