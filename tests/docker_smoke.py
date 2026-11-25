@@ -146,14 +146,15 @@ def exercise(browsers, mode):
         assert browser.fetch('actions.php', {'csrf': csrf, 'action': action}).status == 403
 
     staff = 'Docker臨時員工-' + tag
-    hr.submit(hr.view('staff'), 'employee_save', {'name': staff, 'job_title': '測試員', 'hourly_rate': '200'})
-    staff_id = hr.view('staff', q=staff).record(staff)[0].lstrip('#')
-    hr.submit(hr.view('staff', edit=staff_id), 'employee_save', {'hourly_rate': '210', 'job_title': '測試理貨員'})
+    hr.submit(hr.view('staff'), 'employee_save', {'name': staff, 'job_title': '測試員', 'monthly_salary': '35000', 'employment_status': 'active'})
+    staff_id = re.search(r'#(\d+)', hr.view('staff', q=staff).record(staff)[0]).group(1)
+    hr.submit(hr.view('staff', edit=staff_id), 'employee_save', {'monthly_salary': '36000', 'job_title': '測試理貨員'})
     row = hr.view('staff', q=staff).record(staff)
-    assert '210.00 元' in row and '測試理貨員' in row
+    assert '測試理貨員' in row
+    assert hr.view('staff', edit=staff_id).form('employee_save')['fields']['monthly_salary'] == '36000.00'
     hr.submit(hr.view('staff', q=staff), 'employee_delete', record_id=staff_id)
     assert not matching_rows(hr.view('staff', q=staff), staff)
-    print('PASS role write boundaries and HR create/update/delete', flush=True)
+    print('PASS role write boundaries and staff create/update/delete', flush=True)
 
     result = {
         'mode': mode, 'tag': tag, 'goods_name': name, 'goods_id': int(goods_id),
@@ -194,7 +195,7 @@ def main():
     base = args.base.rstrip('/') + '/'
     browsers = [SmokeBrowser(base, args.username_prefix + username, role, password, context)
                 for username, role in [('client', 'client'), ('client2', 'client'),
-                                       ('employee', 'employee'), ('hr', 'hr')]]
+                                       ('employee', 'employee'), ('hr', 'admin')]]
     report_path = args.output if args.verify_only else args.verify_report
     if report_path:
         result = json.loads(report_path.read_text())

@@ -14,7 +14,7 @@ from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, buil
 
 ROOT = Path(__file__).resolve().parents[1]
 TABLES = ['clients', 'warehouses', 'sections', 'goods', 'employees', 'inventory',
-          'movements', 'users', 'stock_requests']
+          'movements', 'users', 'stock_requests', 'account_tokens', 'admin_audit']
 
 
 def run(args, data=None, capture=False):
@@ -36,9 +36,9 @@ def scalar(compose, sql):
 
 
 def check_schema(compose):
-    assert scalar(compose, 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()') == 9
-    assert scalar(compose, "SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND constraint_type='FOREIGN KEY'") == 14
-    print('PASS live MySQL schema: 9 tables, 14 foreign keys', flush=True)
+    assert scalar(compose, 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()') == 11
+    assert scalar(compose, "SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND constraint_type='FOREIGN KEY'") == 18
+    print('PASS live MySQL schema: 11 tables, 18 foreign keys', flush=True)
 
 
 def snapshot(compose):
@@ -96,6 +96,15 @@ def restart_and_verify(compose, mode, base, ca=None):
     print('PASS every table survived container stop/up unchanged', flush=True)
 
 
+
+def accounts(compose, base, ca=None):
+    from account_http import exercise_accounts
+    password = os.environ.get('WAREHOUSE_TEST_PASSWORD', 'WarehouseDemo!26')
+    def issue(username):
+        return run(compose + ['exec', '-T', 'web', 'php', 'bin/account.php', 'invite', username, '--base-url', base], capture=True)
+    exercise_accounts(base, password, issue, lambda sql, params: query(compose, sql, params), str(ca) if ca else None)
+
+
 def seeded():
     compose = ['docker', 'compose']
     # Same build/start as README; --wait only waits for readiness before automated requests.
@@ -109,6 +118,7 @@ def seeded():
     run(compose + ['exec', '-T', 'web', 'sh', '-c', 'find app public bin -name "*.php" -print0 | xargs -0 -n1 php -l'])
     run(['python3', 'tests/demo_accounts.py'])
     smoke(compose, 'seeded', 'http://127.0.0.1:8080')
+    accounts(compose, 'http://127.0.0.1:8080')
     restart_and_verify(compose, 'seeded', 'http://127.0.0.1:8080')
     run(compose + ['stop'])
 
@@ -141,7 +151,7 @@ def production():
     setup = setup.replace('請填', '容器測試')
     root_sql(compose, setup)
     root_sql(compose, "INSERT INTO clients (name) VALUES ('容器測試第二客戶');\nINSERT INTO sections (warehouse_id,client_id,name,capacity) VALUES (1,2,'B-02',100);")
-    for username, role, entity in [('client','client','1'),('client2','client','2'),('employee','employee','2'),('hr','hr','1')]:
+    for username, role, entity in [('client','client','1'),('client2','client','2'),('employee','employee','2'),('hr','admin','1')]:
         run(compose + ['exec', '-T', 'web', 'php', 'bin/account.php', 'create', username, role, entity], app_password + '\n')
     assert scalar(compose, 'SELECT COUNT(*) FROM users') == 4
     print('PASS documented initial data, restricted database grants and CLI accounts', flush=True)
@@ -172,6 +182,7 @@ def production():
         assert error.code in (301, 308) and error.headers['Location'].startswith('https://localhost/'), error
     print('PASS HTTPS certificate validation, HTTP redirect and private-path protection', flush=True)
     smoke(compose, 'production', 'https://localhost', ca)
+    accounts(compose, 'https://localhost', ca)
     restart_and_verify(compose, 'production', 'https://localhost', ca)
     before = snapshot(compose)
     backup = run(compose + ['exec','-T','db','sh','-c','MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --single-transaction --no-tablespaces --set-gtid-purged=OFF warehouse'], capture=True)
@@ -189,14 +200,24 @@ def production():
     print('PASS documented mysqldump backup and restore round-trip', flush=True)
     # Exercise the old eight-table installation, then apply the published migration.
     root_sql(compose, 'CREATE DATABASE warehouse_upgrade_test CHARACTER SET utf8mb4;')
-    legacy = (ROOT / 'database/01-schema.sql').read_text().split('CREATE TABLE stock_requests')[0]
-    root_sql(compose, legacy + '\n' + (ROOT / 'database/02-seed.sql').read_text(), 'warehouse_upgrade_test')
+    legacy = (ROOT / 'tests/fixtures/pre-account-schema.sql').read_text().split('CREATE TABLE stock_requests')[0]
+    root_sql(compose, legacy + '\n' + (ROOT / 'tests/fixtures/pre-account-seed.sql').read_text(), 'warehouse_upgrade_test')
     migration = (ROOT / 'database/migrations/20261126-stock-requests.sql').read_text()
     root_sql(compose, migration, 'warehouse_upgrade_test')
     root_sql(compose, migration, 'warehouse_upgrade_test')
     result = root_sql(compose, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE(); SELECT COUNT(*) FROM movements; SELECT SUM(quantity) FROM inventory;", 'warehouse_upgrade_test')
     assert result.splitlines() == ['9','6','158'], result
     print('PASS migration from eight tables, repeated migration and original seed preservation', flush=True)
+    account_migration = (ROOT / 'database/migrations/20261126-account-management.sql').read_text()
+    before_business = root_sql(compose, 'SELECT * FROM movements ORDER BY id; SELECT * FROM inventory ORDER BY id;', 'warehouse_upgrade_test')
+    root_sql(compose, account_migration, 'warehouse_upgrade_test')
+    root_sql(compose, account_migration, 'warehouse_upgrade_test')
+    after_business = root_sql(compose, 'SELECT * FROM movements ORDER BY id; SELECT * FROM inventory ORDER BY id;', 'warehouse_upgrade_test')
+    assert before_business == after_business, 'Account migration changed stock or movement history.'
+    upgraded = root_sql(compose, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE(); SELECT role FROM users WHERE username='hr'; SELECT COUNT(*) FROM employees WHERE monthly_salary IS NOT NULL;", 'warehouse_upgrade_test')
+    assert upgraded.splitlines() == ['11', 'admin', '0'], upgraded
+    print('PASS account migration preserves existing stock, credentials and unknown monthly salaries', flush=True)
+
     run(compose + ['stop'])
 
 

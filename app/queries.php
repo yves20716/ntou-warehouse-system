@@ -30,9 +30,9 @@ function dashboard_data(string $q = '', ?int $warehouseId = null): array
         go('index.php');
     }
     $data = ['goods' => [], 'inventory' => [], 'movements' => [], 'employees' => [], 'clients' => [], 'sections' => []];
-    if ($user['role'] === 'hr') {
+    if ($user['role'] === 'admin') {
         $data['employees'] = dashboard_rows(
-            'SELECT e.id, e.name, e.job_title, e.hourly_rate, e.birth_date, e.overtime_hours, e.insurer, e.manager_id, m.name AS manager_name
+            'SELECT e.id, e.name, e.job_title, e.monthly_salary, e.employment_status, e.birth_date, e.overtime_hours, e.insurer, e.manager_id, m.name AS manager_name
              FROM employees e LEFT JOIN employees m ON e.manager_id = m.id',
             'e.id', $q, ['e.id', 'e.name', 'e.job_title', 'm.name']
         );

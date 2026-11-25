@@ -39,7 +39,9 @@ CREATE TABLE employees (
     id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(100) NOT NULL,
     job_title VARCHAR(80) NOT NULL,
-    hourly_rate DECIMAL(8,2) NOT NULL CHECK (hourly_rate >= 0),
+    hourly_rate DECIMAL(8,2) NOT NULL DEFAULT 0 CHECK (hourly_rate >= 0),
+    monthly_salary DECIMAL(10,2) CHECK (monthly_salary >= 0),
+    employment_status ENUM('active','inactive') NOT NULL DEFAULT 'active',
     manager_id INT,
     birth_date DATE,
     overtime_hours DECIMAL(6,2) NOT NULL DEFAULT 0 CHECK (overtime_hours >= 0),
@@ -72,11 +74,15 @@ CREATE TABLE users (
     id INT PRIMARY KEY AUTO_INCREMENT,
     username VARCHAR(80) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('client','employee','hr') NOT NULL,
+    role ENUM('client','employee','admin') NOT NULL,
+    status ENUM('pending','active','disabled') NOT NULL DEFAULT 'active',
+    auth_version INT UNSIGNED NOT NULL DEFAULT 1,
+    password_set_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    reset_requested_at DATETIME,
     client_id INT,
     employee_id INT,
-    CHECK ((role = 'client' AND client_id IS NOT NULL AND employee_id IS NULL)
-        OR (role IN ('employee','hr') AND employee_id IS NOT NULL AND client_id IS NULL)),
+    CONSTRAINT chk_user_identity CHECK ((role = 'client' AND client_id IS NOT NULL AND employee_id IS NULL)
+        OR (role IN ('employee','admin') AND employee_id IS NOT NULL AND client_id IS NULL)),
     FOREIGN KEY (client_id) REFERENCES clients(id),
     FOREIGN KEY (employee_id) REFERENCES employees(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -105,4 +111,32 @@ CREATE TABLE stock_requests (
     FOREIGN KEY (stock_id) REFERENCES inventory(id),
     FOREIGN KEY (employee_id) REFERENCES employees(id),
     FOREIGN KEY (movement_id) REFERENCES movements(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+CREATE TABLE account_tokens (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    token_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
+    purpose ENUM('activate','reset') NOT NULL,
+    auth_version INT UNSIGNED NOT NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX token_user (user_id, used_at),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE admin_audit (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    actor_user_id INT,
+    target_user_id INT,
+    target_employee_id INT,
+    event VARCHAR(50) NOT NULL,
+    details VARCHAR(500) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX audit_time (created_at, id),
+    FOREIGN KEY (actor_user_id) REFERENCES users(id),
+    FOREIGN KEY (target_user_id) REFERENCES users(id),
+    FOREIGN KEY (target_employee_id) REFERENCES employees(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

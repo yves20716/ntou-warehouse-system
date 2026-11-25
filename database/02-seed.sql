@@ -14,10 +14,10 @@ INSERT INTO sections (id, warehouse_id, client_id, name, capacity, rent_start, r
 INSERT INTO goods (id, client_id, name, unit) VALUES
     (1, 1, '玻璃保鮮盒', '箱'), (2, 1, '棉布提袋', '箱'),
     (3, 2, '登山頭燈', '箱'), (4, 2, '摺疊推車', '台'), (5, 1, '矽膠杯墊', '箱');
-INSERT INTO employees (id, name, job_title, hourly_rate, manager_id, overtime_hours, insurer) VALUES
-    (1, '林示範', '人事主任', 320, NULL, 0, '示範保險'),
-    (2, '江示範', '理貨員', 230, 1, 2, '示範保險'),
-    (3, '徐示範', '倉務助理', 215, 1, 0, NULL);
+INSERT INTO employees (id, name, job_title, hourly_rate, monthly_salary, manager_id, overtime_hours, insurer) VALUES
+    (1, '林示範', '帳號管理員', 320, 45000, NULL, 0, '示範保險'),
+    (2, '江示範', '理貨員', 230, 36000, 1, 2, '示範保險'),
+    (3, '徐示範', '倉務助理', 215, 34000, 1, 0, NULL);
 -- Each lot starts with one receipt. The balance equals receipts less dispatches.
 INSERT INTO inventory (id, goods_id, section_id, quantity, arrival_date) VALUES
     (1, 1, 1, 72, '2026-11-10'), (2, 2, 2, 36, '2026-11-12'),
@@ -34,6 +34,6 @@ INSERT INTO movements (stock_id, type, quantity, moved_at, employee_id) VALUES
 SET @demo_hash = '$2y$10$Eu48XIlVxa3Jq5i6i.jIfelA5aC00goAKZpYe2u4ab0YBsYkxrDpO';
 INSERT INTO users (username, password_hash, role, client_id, employee_id) VALUES
     ('client', @demo_hash, 'client', 1, NULL), ('client2', @demo_hash, 'client', 2, NULL),
-    ('employee', @demo_hash, 'employee', NULL, 2), ('hr', @demo_hash, 'hr', NULL, 1);
+    ('employee', @demo_hash, 'employee', NULL, 2), ('hr', @demo_hash, 'admin', NULL, 1);
 
 COMMIT;

@@ -36,7 +36,7 @@ def run(base, php):
             assert path == ('/' + role + '.php' if success else '/index.php'), path
         return browser
 
-    for role, entity in [('client', '1'), ('employee', '2'), ('hr', '1')]:
+    for role, entity in [('client', '1'), ('employee', '2'), ('admin', '1')]:
         username = 'deploy_' + tag + '_' + role
         account(['create', username, role, entity], password)
         browser = login(username, password, role)
@@ -49,7 +49,7 @@ def run(base, php):
             login(username, password, role, success=False)
             login(username, new_password, role)
     print('PASS CLI creates all three roles; duplicate account is rejected; reset invalidates old login and password')
-    account(['create', 'deploy_' + tag + '_badrole', 'admin', '1'], password, expected=1)
+    account(['create', 'deploy_' + tag + '_badrole', 'superadmin', '1'], password, expected=1)
     account(['create', 'deploy_' + tag + '_missing', 'client', '2147483647'], password, expected=1)
     account(['password', 'deploy_' + tag + '_absent'], password, expected=1)
     account(['create', 'deploy_' + tag + '_short', 'client', '1'], 'short', expected=1)

@@ -14,7 +14,9 @@
         const label = region.getAttribute('aria-label');
         const choices = isPreview ? [] : label === '庫存批次' ? ['全部', '在庫', '已出清']
             : label === '進出貨明細' ? ['全部', '入庫', '出庫']
-            : label === '收發申請' ? ['全部', '待處理', '已完成', '未受理', '已取消'] : [];
+            : label === '收發申請' ? ['全部', '待處理', '已完成', '未受理', '已取消']
+            : label === '帳號清單' ? ['全部', '啟用', '待啟用', '停用']
+            : label === '人員名冊' ? ['全部', '在職', '離職'] : [];
         const limit = isPreview ? rows.length : pageSize;
         const records = rows.map((row) => ({ row, status: row.querySelector('.pill')?.textContent.trim() ?? '' }));
         let selected = '全部';
@@ -115,7 +117,8 @@
             empty.hidden = matching.length > 0;
             region.hidden = matching.length === 0;
             emptyMessage.textContent = label === '庫存批次'
-                ? `目前沒有${selected}的批次。` : label === '收發申請' ? `目前沒有${selected}的申請。` : `目前沒有${selected}紀錄。`;
+                ? `目前沒有${selected}的批次。` : label === '收發申請' ? `目前沒有${selected}的申請。` : label === '帳號清單' ? `沒有${selected}的帳號。`
+                : label === '人員名冊' ? `沒有${selected}員工。` : `目前沒有${selected}紀錄。`;
         }
 
         render();

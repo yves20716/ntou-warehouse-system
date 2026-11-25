@@ -4,7 +4,7 @@ require __DIR__.'/../app/bootstrap.php';
 require __DIR__.'/partials/layout.php';
 $user = current_user();
 if ($user) {
-    $home = ['client' => 'client.php', 'employee' => 'employee.php', 'hr' => 'hr.php'];
+    $home = ['client' => 'client.php', 'employee' => 'employee.php', 'admin' => 'admin.php'];
     header('Location: '.$home[$user['role']]);
     exit;
 }

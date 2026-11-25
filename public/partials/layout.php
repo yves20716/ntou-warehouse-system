@@ -16,9 +16,9 @@ function ui_head(string $title): void { ?>
     <title><?= h($title) ?> ｜ NEXUS WMS</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="assets/styles.css?v=20261126d">
-    <link rel="stylesheet" href="assets/workspace.css?v=20261126d">
+    <link rel="stylesheet" href="assets/workspace.css?v=20261126e">
     <script src="assets/app.js?v=20261126b" defer></script>
-    <script src="assets/table-tools.js?v=20261126b" defer></script>
+    <script src="assets/table-tools.js?v=20261126e" defer></script>
     <script src="assets/workbench.js?v=20261126c" defer></script>
 </head>
 <body>
@@ -35,6 +35,9 @@ function ui_nav_icon(string $key): void {
         'inventory' => '<path d="M3 21V7l9-5 9 5v14M1 21h22M7 21V11h10v10M7 16h10"/>',
         'movements' => '<path d="M3 7h17m-4-4 4 4-4 4M21 17H4m4-4-4 4 4 4"/>',
         'requests' => '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 15h6"/>',
+        'accounts' => '<rect x="3" y="5" width="18" height="15" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M5 17v-1a3 3 0 0 1 6 0v1M14 10h4M14 14h4"/>',
+        'permissions' => '<path d="m12 2 9 4v6c0 5-9 10-9 10S3 17 3 12V6l9-4Z"/><path d="m8 12 3 3 5-6"/>',
+        'audit' => '<path d="M9 3h11v18H4V8l5-5Zm0 0v5H4M8 12h8M8 16h8"/>',
         'staff' => '<circle cx="9" cy="7" r="4"/><path d="M2 21v-2a7 7 0 0 1 14 0v2M17 3a4 4 0 0 1 0 8M22 21v-2a7 7 0 0 0-4-6"/>',
     ];
     echo '<svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'.($paths[$key] ?? $paths['overview']).'</svg>';
@@ -53,13 +56,13 @@ function ui_fields(string $action): void {
     ?>
     <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
     <input type="hidden" name="action" value="<?= h($action) ?>">
-    <?php if (in_array($action, ['goods_save', 'goods_delete', 'stock_in', 'stock_out', 'employee_save', 'employee_delete', 'client_goods_save', 'client_request_in', 'client_request_out', 'client_request_cancel', 'request_complete', 'request_reject'], true)): ?>
+    <?php if (in_array($action, ['goods_save', 'goods_delete', 'stock_in', 'stock_out', 'employee_save', 'employee_delete', 'client_goods_save', 'client_request_in', 'client_request_out', 'client_request_cancel', 'request_complete', 'request_reject', 'account_create', 'account_status', 'account_reset_request'], true)): ?>
         <input type="hidden" name="mutation_token" value="<?= h($pageTokens[$action] ??= mutation_token($action)) ?>">
     <?php endif; ?>
 <?php }
 
 function ui_page(array $user, array $nav, string $view, string $subtitle): void {
-    $role = ['employee' => '倉儲作業', 'client' => '客戶專區', 'hr' => '人資管理'][$user['role']];
+    $role = ['employee' => '倉儲作業', 'client' => '客戶專區', 'admin' => '帳號與人員管理'][$user['role']];
     $title = $nav[$view];
     ui_head($title); ?>
 <a class="skip-link" href="#main">跳至主要內容</a>
@@ -78,7 +81,9 @@ function ui_page(array $user, array $nav, string $view, string $subtitle): void 
         <?php if ($user['role'] === 'employee'): ?>
             <?php if ($view === 'goods'): ?><a class="button primary" href="?view=goods#goods-form">新增貨物</a>
             <?php elseif ($view !== 'requests'): ?><a class="button" href="<?= $view === 'inventory' ? '#stock-out-form' : '?view=inventory#stock-out-form' ?>">登記出庫</a><a class="button primary" href="<?= $view === 'inventory' ? '#stock-in-form' : '?view=inventory#stock-in-form' ?>">登記入庫</a><?php endif; ?>
-        <?php elseif ($user['role'] === 'hr'): ?><a class="button primary" href="?view=staff#staff-form">新增員工</a>
+        <?php elseif ($user['role'] === 'admin'): ?>
+            <?php if ($view === 'staff'): ?><a class="button primary" href="?view=staff#staff-form">新增員工</a>
+            <?php elseif (in_array($view, ['overview', 'accounts'], true)): ?><a class="button primary" href="?view=accounts#account-form">新增帳號</a><?php endif; ?>
         <?php elseif ($view === 'goods'): ?><a class="button primary" href="?view=goods#client-goods-form">建立品項</a>
         <?php else: ?><a class="button" href="?view=inventory">選貨出庫</a><a class="button primary" href="?view=requests#request-in-form">申請入庫</a><?php endif; ?>
         </div></header>

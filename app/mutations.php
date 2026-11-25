@@ -29,16 +29,22 @@ function save_goods(?int $owner = null): string
 function delete_record(string $table): string
 {
     $id = input_id('id', '編號');
-    $sql = match ($table) {
-        'goods' => 'DELETE FROM goods WHERE id = ?',
-        'employees' => 'DELETE FROM employees WHERE id = ?',
-    };
-    $statement = db()->prepare($sql);
-    $statement->execute([$id]);
-    if ($statement->rowCount() === 0) {
-        throw new DomainException('這筆資料已不存在。');
+    if ($table === 'employees') {
+        transaction(function (PDO $conn) use ($id) {
+            if (!rows('SELECT id FROM employees WHERE id=? FOR UPDATE', [$id])) throw new DomainException('這筆資料已不存在。');
+            assert_manageable_employee($id);
+            $conn->prepare('DELETE FROM employees WHERE id=?')->execute([$id]);
+            admin_audit_record('employee_deleted', "刪除無關聯的員工資料 #{$id}。");
+        });
+        return '已刪除員工資料。';
     }
-    return $table === 'goods' ? '已刪除貨物。' : '已刪除員工資料。';
+    if ($table !== 'goods') throw new LogicException('Unsupported table.');
+    transaction(function (PDO $conn) use ($id) {
+        $statement = $conn->prepare('DELETE FROM goods WHERE id=?');
+        $statement->execute([$id]);
+        if ($statement->rowCount() === 0) throw new DomainException('這筆資料已不存在。');
+    });
+    return '已刪除貨物。';
 }
 
 function decimal_input(string $key, string $label, int $wholeDigits, ?string $default = null): string
@@ -56,7 +62,9 @@ function save_employee(): string
     $manager = input_id('manager_id', '主管', true);
     $name = input_text('name', '姓名', 100);
     $job = input_text('job_title', '職務', 80);
-    $rate = decimal_input('hourly_rate', '時薪', 6);
+    $salary = ($_POST['monthly_salary'] ?? '') === '' ? null : decimal_input('monthly_salary', '月薪', 8);
+    $status = $_POST['employment_status'] ?? 'active';
+    if (!in_array($status, ['active', 'inactive'], true)) throw new DomainException('請選擇有效的在職狀態。');
     $overtime = decimal_input('overtime_hours', '加班時數', 4, '0');
     $insurer = $_POST['insurer'] ?? '';
     if (!is_string($insurer)) {
@@ -74,15 +82,19 @@ function save_employee(): string
             throw new DomainException('請填寫有效的出生日期。');
         }
     }
-    transaction(function (PDO $conn) use ($id, $manager, $name, $job, $rate, $birth, $overtime, $insurer) {
+    transaction(function (PDO $conn) use ($id, $manager, $name, $job, $salary, $status, $birth, $overtime, $insurer) {
         // Lock the small personnel roster so concurrent supervisor edits cannot create a cycle.
-        $reporting = array_column(rows('SELECT id, manager_id FROM employees ORDER BY id FOR UPDATE'), 'manager_id', 'id');
+        $roster = rows('SELECT id, manager_id, employment_status FROM employees ORDER BY id FOR UPDATE');
+        $reporting = array_column($roster, 'manager_id', 'id');
+        $statuses = array_column($roster, 'employment_status', 'id');
+        if ($id !== null) assert_manageable_employee($id);
         if ($id !== null && !array_key_exists($id, $reporting)) {
             throw new DomainException('找不到這位員工。');
         }
         if ($manager !== null && !array_key_exists($manager, $reporting)) {
             throw new DomainException('找不到這位主管。');
         }
+        if ($manager !== null && $statuses[$manager] !== 'active') throw new DomainException('請選擇在職主管。');
         $seen = [];
         for ($next = $manager; $next !== null; $next = $reporting[$next]) {
             if ((int)$next === $id || isset($seen[$next])) {
@@ -90,14 +102,29 @@ function save_employee(): string
             }
             $seen[$next] = true;
         }
-        $values = [$name, $job, $rate, $manager, $birth ?: null, $overtime, $insurer];
+        $values = [$name, $job, $salary, $status, $manager, $birth ?: null, $overtime, $insurer];
         if ($id === null) {
-            $conn->prepare('INSERT INTO employees (name, job_title, hourly_rate, manager_id, birth_date, overtime_hours, insurer)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)')->execute($values);
+            $conn->prepare('INSERT INTO employees (name, job_title, monthly_salary, employment_status, manager_id, birth_date, overtime_hours, insurer)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)')->execute($values);
+            $newId = (int)$conn->lastInsertId();
+            admin_audit_record('employee_created', "新增員工資料 #{$newId}。", null, $newId);
         } else {
             $values[] = $id;
-            $conn->prepare('UPDATE employees SET name=?, job_title=?, hourly_rate=?, manager_id=?, birth_date=?, overtime_hours=?, insurer=?
+            $conn->prepare('UPDATE employees SET name=?, job_title=?, monthly_salary=?, employment_status=?, manager_id=?, birth_date=?, overtime_hours=?, insurer=?
                             WHERE id=?')->execute($values);
+            $detail = "更新員工資料 #{$id}。";
+            if ($statuses[$id] !== $status) {
+                $labels = ['active' => '在職', 'inactive' => '離職'];
+                $detail .= '在職狀態由「' . $labels[$statuses[$id]] . '」改為「' . $labels[$status] . '」。';
+                $accounts = rows('SELECT id FROM users WHERE employee_id=? FOR UPDATE', [$id]);
+                if ($status === 'inactive') {
+                    $conn->prepare("UPDATE users SET status='disabled',auth_version=auth_version+1 WHERE employee_id=?")->execute([$id]);
+                } else {
+                    $conn->prepare('UPDATE users SET auth_version=auth_version+1 WHERE employee_id=?')->execute([$id]);
+                }
+                foreach ($accounts as $account) revoke_account_tokens((int)$account['id']);
+            }
+            admin_audit_record('employee_updated', $detail, null, $id);
         }
     });
     return $id === null ? "已將{$name}加入員工名冊。" : "已更新{$name}的員工資料。";

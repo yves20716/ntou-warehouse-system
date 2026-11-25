@@ -56,16 +56,34 @@ function go(string $location): never
     exit;
 }
 
+function account_auth_version(array $user): string
+{
+    return hash('sha256', implode('|', [
+        $user['password_hash'], $user['role'], $user['client_id'] ?? '', $user['employee_id'] ?? '',
+        $user['auth_version'], $user['status'], $user['employment_status'] ?? '',
+        $user['password_set_at'] ?? '', $user['reset_requested_at'] ?? '',
+    ]));
+}
+
+function account_can_login(array $user): bool
+{
+    return $user['status'] === 'active' && $user['password_set_at'] !== null
+        && $user['reset_requested_at'] === null
+        && ($user['role'] === 'client' || ($user['employment_status'] ?? '') === 'active');
+}
+
 function current_user(): ?array
 {
     if (!isset($_SESSION['user_id'])) {
         return null;
     }
     $user = rows('SELECT u.id, u.username, u.role, u.client_id, u.employee_id, u.password_hash,
+                        u.status, u.auth_version, u.password_set_at, u.reset_requested_at, e.employment_status,
                         COALESCE(c.name, e.name) AS display_name
                  FROM users u LEFT JOIN clients c ON c.id = u.client_id
                  LEFT JOIN employees e ON e.id = u.employee_id WHERE u.id = ?', [$_SESSION['user_id']])[0] ?? null;
-    if (!$user || !hash_equals(hash('sha256', $user['password_hash']), $_SESSION['auth_version'] ?? '')) {
+    if (!$user || !account_can_login($user)
+        || !hash_equals(account_auth_version($user), $_SESSION['auth_version'] ?? '')) {
         $_SESSION = [];
         return null;
     }
@@ -123,7 +141,8 @@ function remember_form_input(string $action): void
         'client_request_cancel' => ['id'],
         'request_complete' => ['id', 'section_id'],
         'request_reject' => ['id', 'response_note'],
-        'employee_save' => ['id', 'name', 'job_title', 'hourly_rate', 'manager_id', 'birth_date', 'overtime_hours', 'insurer'],
+        'employee_save' => ['id', 'name', 'job_title', 'monthly_salary', 'employment_status', 'manager_id', 'birth_date', 'overtime_hours', 'insurer'],
+        'account_create' => ['username', 'role', 'client_id', 'employee_id'],
         'stock_in' => ['goods_id', 'section_id', 'quantity'],
         'stock_out' => ['stock_id', 'quantity'],
         default => [],
@@ -191,6 +210,18 @@ function transaction(callable $operation): mixed
     $conn = db();
     $conn->beginTransaction();
     try {
+        // Serialize protected writes against account suspension and personnel status changes.
+        if (isset($_SESSION['user_id'])) {
+            $actor = rows('SELECT * FROM users WHERE id = ? FOR SHARE', [$_SESSION['user_id']])[0] ?? null;
+            if ($actor && $actor['employee_id'] !== null) {
+                $actor['employment_status'] = rows('SELECT employment_status FROM employees WHERE id = ? FOR SHARE', [$actor['employee_id']])[0]['employment_status'] ?? null;
+            }
+            if (!$actor || !account_can_login($actor)
+                || !hash_equals(account_auth_version($actor), $_SESSION['auth_version'] ?? '')) {
+                $_SESSION = [];
+                throw new DomainException('登入已失效，請重新登入。');
+            }
+        }
         $result = $operation($conn);
         $conn->commit();
         return $result;
@@ -203,3 +234,4 @@ function transaction(callable $operation): mixed
 }
 
 require_once __DIR__ . '/queries.php';
+require_once __DIR__ . '/accounts.php';

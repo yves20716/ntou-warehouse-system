@@ -152,3 +152,25 @@
     @keyframes drawer-enter { from { transform: translateX(24px); opacity: .5; } to { transform: translateX(0); opacity: 1; } }
 }
 @media print { .app-bar, .workspace-nav, .drawer { display: none; } .shell { padding: 0; } .main { max-width: none; margin: 0; padding: 0; } }
+
+/* Account management uses the shared table and drawer controls. */
+.account-permission-link { margin: 20px 0 0; font-size: .8125rem; }
+.account-operation h3 { margin-bottom: 16px; }
+.audit-detail { min-width: 220px; max-width: 380px; white-space: normal; overflow-wrap: anywhere; }
+.permissions-table th[scope="row"] { background: white; font-weight: 500; color: var(--ink); }
+.permissions-table tbody td { color: #47546a; }
+@media (max-width: 700px) {
+    .table-scroll:has(.account-table), .table-scroll:has(.staff-table) { overflow: visible; }
+    .table-scroll:has(.account-table)::before, .table-scroll:has(.staff-table)::before { display: none; }
+    .account-table thead, .staff-table thead { display: none; }
+    .account-table, .account-table tbody, .staff-table, .staff-table tbody { display: block; white-space: normal; }
+    .account-table tr, .staff-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; border-bottom: 1px solid var(--line); }
+    .account-table tr:last-child, .staff-table tr:last-child { border-bottom: 0; }
+    .account-table tr td, .staff-table tr td { display: block; padding: 0; border: 0; }
+    .account-table td:first-child, .staff-table td:first-child { grid-column: 1/-1; }
+    .account-table td:nth-child(2), .staff-table td:nth-child(2) { color: var(--muted); }
+    .account-table td:nth-child(3), .staff-table td:nth-child(3) { text-align: right; }
+    .account-table td:last-child, .staff-table td:last-child { text-align: right; }
+    .account-table .row-actions, .staff-table .row-actions { justify-content: end; }
+}
+.account-setup-actions { margin-top: 20px; }

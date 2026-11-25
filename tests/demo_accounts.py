@@ -44,4 +44,4 @@ if __name__ == "__main__":
     check_account(url, "client", "client", "玻璃保鮮盒", "登山頭燈")
     check_account(url, "client2", "client", "登山頭燈", "玻璃保鮮盒")
     check_account(url, "employee", "employee")
-    check_account(url, "hr", "hr")
+    check_account(url, "hr", "admin")

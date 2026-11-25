@@ -127,7 +127,7 @@ def run(base):
     employee = Browser(base, "employee", "employee")
     client = Browser(base, "client", "client")
     other = Browser(base, "client2", "client")
-    hr = Browser(base, "hr", "hr")
+    hr = Browser(base, "hr", "admin")
     tag = uuid.uuid4().hex[:8]
     name = "後端驗證" + tag
 
@@ -184,16 +184,16 @@ def run(base):
     assert not employee.view("goods", q="%_").rows
     print("PASS tenant isolation and literal wildcard search", flush=True)
 
-    staff = "後端人資" + tag
-    created = hr.submit(hr.view("staff"), "employee_save", {"name": staff, "job_title": "測試員", "hourly_rate": "210", "insurer": "0"})
-    staff_id = created.record(staff)[0].lstrip("#")
+    staff = "後端員工" + tag
+    created = hr.submit(hr.view("staff"), "employee_save", {"name": staff, "job_title": "測試員", "monthly_salary": "35000", "employment_status": "active", "insurer": "0"})
+    staff_id = re.search(r"#(\d+)", created.record(staff)[0]).group(1)
     assert hr.view("staff", edit=staff_id).form("employee_save")["fields"]["insurer"] == "0"
-    bad = hr.submit(hr.view("staff", edit=staff_id), "employee_save", {"hourly_rate": "-1", "name": staff + "改"}, expected="error")
+    bad = hr.submit(hr.view("staff", edit=staff_id), "employee_save", {"monthly_salary": "-1", "name": staff + "改"}, expected="error")
     assert "edit=" + staff_id in bad.url and bad.form("employee_save")["fields"]["name"] == staff + "改"
-    for changes in [{"birth_date": "2099-01-01"}, {"birth_date": "2026-02-30"}, {"manager_id": staff_id}, {"hourly_rate": "1000000"}]:
+    for changes in [{"birth_date": "2099-01-01"}, {"birth_date": "2026-02-30"}, {"manager_id": staff_id}, {"monthly_salary": "100000000"}]:
         hr.submit(hr.view("staff", edit=staff_id), "employee_save", changes, expected="error")
-    created = hr.submit(hr.view("staff"), "employee_save", {"name": staff + "主管", "job_title": "測試主管", "hourly_rate": "210", "manager_id": staff_id})
-    manager_id = created.record(staff + "主管")[0].lstrip("#")
+    created = hr.submit(hr.view("staff"), "employee_save", {"name": staff + "主管", "job_title": "測試主管", "monthly_salary": "35000", "employment_status": "active", "manager_id": staff_id})
+    manager_id = re.search(r"#(\d+)", created.record(staff + "主管")[0]).group(1)
     hr.submit(hr.view("staff", edit=staff_id), "employee_save", {"manager_id": manager_id}, expected="error")
     protected = hr.submit(hr.view("staff"), "employee_delete", record_id=staff_id, expected="error")
     assert "部屬" in protected.notices[0][1]

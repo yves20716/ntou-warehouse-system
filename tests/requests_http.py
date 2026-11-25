@@ -10,7 +10,7 @@ def run(base):
     client = Browser(base, 'client', 'client')
     other = Browser(base, 'client2', 'client')
     employee = Browser(base, 'employee', 'employee')
-    hr = Browser(base, 'hr', 'hr')
+    hr = Browser(base, 'hr', 'admin')
     tag = uuid.uuid4().hex[:8]
     name = '申請HTTP' + tag
     goods = client.view('goods')

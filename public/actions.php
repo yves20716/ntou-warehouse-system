@@ -20,12 +20,12 @@ try {
     if ($action === 'login') {
         $username = input_text('username', '帳號', 80);
         $password = $_POST['password'] ?? null;
-        $account = rows('SELECT id, role, password_hash FROM users WHERE username = ?', [$username])[0] ?? null;
-        if (!is_string($password) || !$account || !password_verify($password, $account['password_hash'])) {
+        $account = rows('SELECT u.*, e.employment_status FROM users u LEFT JOIN employees e ON e.id=u.employee_id WHERE u.username = ?', [$username])[0] ?? null;
+        if (!is_string($password) || !$account || !account_can_login($account) || !password_verify($password, $account['password_hash'])) {
             throw new DomainException('帳號或密碼有誤。');
         }
         session_regenerate_id(true);
-        $_SESSION = ['user_id' => $account['id'], 'auth_version' => hash('sha256', $account['password_hash'])];
+        $_SESSION = ['user_id' => $account['id'], 'auth_version' => account_auth_version($account)];
         go($account['role'] . '.php');
     }
     if ($action === 'logout') {
@@ -34,13 +34,23 @@ try {
         go('index.php');
     }
 
+    if ($action === 'password_activate') {
+        $destination = 'activate.php';
+        $message = set_password_from_token();
+        flash('success', $message);
+        go('index.php');
+    }
+
     $routes = [
+        'account_create' => ['admin', 'admin.php?view=accounts'],
+        'account_status' => ['admin', 'admin.php?view=accounts'],
+        'account_reset_request' => ['admin', 'admin.php?view=accounts'],
         'goods_save' => ['employee', 'employee.php?view=goods'],
         'goods_delete' => ['employee', 'employee.php?view=goods'],
         'stock_in' => ['employee', 'employee.php?view=inventory'],
         'stock_out' => ['employee', 'employee.php?view=inventory'],
-        'employee_save' => ['hr', 'hr.php?view=staff'],
-        'employee_delete' => ['hr', 'hr.php?view=staff'],
+        'employee_save' => ['admin', 'admin.php?view=staff'],
+        'employee_delete' => ['admin', 'admin.php?view=staff'],
         'client_goods_save' => ['client', 'client.php?view=goods'],
         'client_request_in' => ['client', 'client.php?view=requests'],
         'client_request_out' => ['client', 'client.php?view=requests'],
@@ -62,6 +72,9 @@ try {
     }
     $token = require_mutation_token($action);
     $message = match ($action) {
+        'account_create' => create_managed_account(),
+        'account_status' => change_account_status(),
+        'account_reset_request' => request_account_reset(),
         'goods_save' => save_goods(),
         'goods_delete' => delete_record('goods'),
         'stock_in' => stock_in((int)$user['employee_id']),
@@ -81,12 +94,15 @@ try {
     flash('success', $message);
 } catch (DomainException $error) {
     remember_form_input($action);
+    if ($action === 'password_activate' && is_string($_POST['token'] ?? null) && preg_match('/\A[a-f0-9]{64}\z/D', $_POST['token'])) {
+        $_SESSION['password_setup_token'] = ['token' => $_POST['token'], 'until' => time() + 600];
+    }
     flash('error', $error->getMessage());
 } catch (PDOException $error) {
     remember_form_input($action);
     $code = (int)($error->errorInfo[1] ?? 0);
     $message = match ($code) {
-        1062 => in_array($action, ['goods_save', 'client_goods_save'], true) ? '這位客戶已有同名貨物，請確認貨名。' : '這筆資料已經存在，請重新確認。',
+        1062 => $action === 'account_create' ? '此帳號名稱已有人使用。' : (in_array($action, ['goods_save', 'client_goods_save'], true) ? '這位客戶已有同名貨物，請確認貨名。' : '這筆資料已經存在，請重新確認。'),
         1217, 1451 => $action === 'goods_delete' ? '這項貨物已有入庫紀錄或收發申請，無法刪除。' : '這位員工仍有部屬、登入帳號、收發申請或進出貨紀錄，無法刪除。',
         1216, 1452 => '選取的資料已不存在，請重新整理後再選一次。',
         1205, 1213 => '資料更新發生衝突，請重新整理後再試。',
