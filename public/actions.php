@@ -41,6 +41,12 @@ try {
         'stock_out' => ['employee', 'employee.php?view=inventory'],
         'employee_save' => ['hr', 'hr.php?view=staff'],
         'employee_delete' => ['hr', 'hr.php?view=staff'],
+        'client_goods_save' => ['client', 'client.php?view=goods'],
+        'client_request_in' => ['client', 'client.php?view=requests'],
+        'client_request_out' => ['client', 'client.php?view=requests'],
+        'client_request_cancel' => ['client', 'client.php?view=requests'],
+        'request_complete' => ['employee', 'employee.php?view=requests'],
+        'request_reject' => ['employee', 'employee.php?view=requests'],
     ];
     if (!isset($routes[$action])) {
         http_response_code(400);
@@ -48,7 +54,7 @@ try {
     }
     [$role, $destination] = $routes[$action];
     $user = require_role($role);
-    if (in_array($action, ['goods_save', 'employee_save'], true)) {
+    if (in_array($action, ['goods_save', 'client_goods_save', 'employee_save'], true)) {
         $id = $_POST['id'] ?? '';
         if (is_string($id) && ctype_digit($id) && (int)$id >= 1 && (int)$id <= 2147483647) {
             $destination .= '&edit=' . (int)$id;
@@ -62,6 +68,12 @@ try {
         'stock_out' => stock_out((int)$user['employee_id']),
         'employee_save' => save_employee(),
         'employee_delete' => delete_record('employees'),
+        'client_goods_save' => save_goods((int)$user['client_id']),
+        'client_request_in' => create_stock_request('in', (int)$user['client_id']),
+        'client_request_out' => create_stock_request('out', (int)$user['client_id']),
+        'client_request_cancel' => cancel_stock_request((int)$user['client_id']),
+        'request_complete' => complete_stock_request((int)$user['employee_id']),
+        'request_reject' => reject_stock_request((int)$user['employee_id']),
     };
     // PHP holds the session lock until this request finishes, including the database commit.
     unset($_SESSION['mutation_tokens'][$token], $_SESSION['form_input']);
@@ -74,8 +86,8 @@ try {
     remember_form_input($action);
     $code = (int)($error->errorInfo[1] ?? 0);
     $message = match ($code) {
-        1062 => $action === 'goods_save' ? '這位客戶已有同名貨物，請確認貨名。' : '這筆資料已經存在，請重新確認。',
-        1217, 1451 => $action === 'goods_delete' ? '這項貨物已有入庫紀錄，無法刪除。' : '這位員工仍有部屬、登入帳號或經手的進出貨紀錄，無法刪除。',
+        1062 => in_array($action, ['goods_save', 'client_goods_save'], true) ? '這位客戶已有同名貨物，請確認貨名。' : '這筆資料已經存在，請重新確認。',
+        1217, 1451 => $action === 'goods_delete' ? '這項貨物已有入庫紀錄或收發申請，無法刪除。' : '這位員工仍有部屬、登入帳號、收發申請或進出貨紀錄，無法刪除。',
         1216, 1452 => '選取的資料已不存在，請重新整理後再選一次。',
         1205, 1213 => '其他人正在更新資料，請重新整理後再試。',
         default => '目前無法完成操作，請稍後再試。',

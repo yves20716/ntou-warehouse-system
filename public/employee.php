@@ -2,13 +2,15 @@
 declare(strict_types=1);
 require __DIR__.'/../app/bootstrap.php';
 require __DIR__.'/partials/layout.php';
+require __DIR__.'/partials/workflows.php';
 $user = require_role('employee');
-$nav = ['overview' => '倉儲總覽', 'goods' => '貨物管理', 'inventory' => '庫存與收發', 'movements' => '進出貨紀錄'];
+$nav = ['overview' => '收發工作台', 'goods' => '貨物管理', 'inventory' => '庫存與收發', 'movements' => '進出貨紀錄', 'requests' => '客戶申請'];
 $view = ui_text('view');
 $view = isset($nav[$view]) ? $view : 'overview';
 $hints = [
-    'overview' => '查看各倉庫的庫存分布，或直接登記本次收發。',
-    'goods' => '新增品項時請填寫所屬客戶和計量單位。貨物入庫後，只能修改貨名。',
+    'overview' => '先處理客戶申請，或查找本次要收發的貨物。',
+    'requests' => '確認實際收發後再完成申請，庫存與紀錄會一起更新。',
+    'goods' => '新增品項時請填寫所屬客戶和計量單位。貨物已有申請或入庫紀錄後，只能修改貨名。',
     'inventory' => '入庫時先選貨物，再選客戶承租的儲區。出庫時請選擇要扣除數量的批次。',
     'movements' => '按貨名、批號或儲區搜尋，可查到每次進出貨的時間、數量和承辦員工。',
 ];
@@ -29,16 +31,14 @@ if ((string)($goodsInput['id'] ?? '') !== (string)($editing['id'] ?? '')) {
     $goodsInput = [];
 }
 $goodsValues = array_replace($editing ?? [], $goodsInput);
-$goodsLocked = $editing && array_filter($goodsOptions['inventory'], fn($row) => (string)$row['goods_id'] === (string)$editing['id']);
+$requests = request_data($view === 'requests' ? $q : '');
+$goodsLocked = $editing && (array_filter($goodsOptions['inventory'], fn($row) => (string)$row['goods_id'] === (string)$editing['id']) || array_filter($requests, fn($r) => $r['type'] === 'in' && (string)$r['goods_id'] === (string)$editing['id']));
 if ($goodsLocked) {
     $goodsValues['client_id'] = $editing['client_id'];
     $goodsValues['unit'] = $editing['unit'];
 }
 ui_page($user, $nav, $view, $hints[$view]);
-if ($view === 'overview') {
-    ui_stats([['已建檔品項', count($data['goods']), '種'], ['在庫批次', count(array_filter($data['inventory'], fn($r) => $r['quantity'] > 0)), '批'], ['使用中儲區', count(array_unique(array_column(array_filter($data['inventory'], fn($r) => $r['quantity'] > 0), 'section_id'))), '區']]);
-    ui_stock_summary($data['inventory']);
-}
+if ($view === 'overview') ui_workbench($data, $requests, true);
 if ($view === 'goods'): ?>
     <section class="panel">
         <?php ui_section('貨物清單'); ui_search($view, $q, '輸入貨物或客戶名稱');
@@ -51,7 +51,7 @@ if ($view === 'goods'): ?>
             </tr><?php endforeach; ?></tbody>
         </table></div><?php endif; ?>
     </section>
-    <section class="panel" id="goods-form">
+    <section class="panel" id="goods-form" data-drawer <?= $goodsInput || $editId !== '' ? 'data-open' : '' ?>>
         <?php ui_section($editId !== '' ? '編輯貨物' : '新增貨物');
         if ($editId !== '' && !$editing): ?>
         <div class="panel-body"><p class="form-note">找不到這筆貨物，可能已被刪除。請從貨物清單重新選擇。</p><a class="text-link" href="?view=goods">返回貨物管理</a></div>
@@ -59,7 +59,7 @@ if ($view === 'goods'): ?>
         <form class="field-grid cols panel-body" method="post" action="actions.php">
             <?php ui_fields('goods_save'); ?>
             <input type="hidden" name="id" value="<?= h($editing['id'] ?? '') ?>">
-            <?php if ($goodsLocked): ?><p class="form-note" id="goods-lock-note">這項貨物已有入庫紀錄，只能修改貨名。所屬客戶與計量單位已鎖定。</p><?php endif; ?>
+            <?php if ($goodsLocked): ?><p class="form-note" id="goods-lock-note">這項貨物已有申請或入庫紀錄，只能修改貨名。所屬客戶與計量單位已鎖定。</p><?php endif; ?>
             <label>貨物名稱<input name="name" required maxlength="100" value="<?= h($goodsValues['name'] ?? '') ?>"></label>
             <label>所屬客戶<select name="client_id" required <?= $goodsLocked ? 'disabled aria-describedby="goods-lock-note"' : '' ?>><option value="">選擇客戶</option>
                 <?php foreach ($goodsOptions['clients'] as $client): ?><option value="<?= h($client['id']) ?>" <?= (string)($goodsValues['client_id'] ?? '') === (string)$client['id'] ? 'selected' : '' ?>><?= h($client['name']) ?></option><?php endforeach; ?>
@@ -71,7 +71,7 @@ if ($view === 'goods'): ?>
         <?php endif; ?>
     </section>
 <?php endif;
-if (in_array($view, ['overview', 'inventory'], true)): ?>
+if ($view === 'inventory'): ?>
     <section class="panel"><?php ui_section('庫存批次', $view === 'overview' ? 'inventory' : null);
         if ($view === 'inventory') ui_search($view, $q, '輸入貨名、批號或儲區', $warehouseId);
         ui_inventory($view === 'overview' ? array_slice($data['inventory'], 0, 5) : $data['inventory'], true, $q); ?></section>
@@ -87,7 +87,7 @@ if ($view === 'inventory'):
         }
     } ?>
     <div class="two-up">
-    <section class="panel" id="stock-in-form"><?php ui_section('入庫登記'); ?>
+    <section class="panel" id="stock-in-form" data-drawer <?= $inValues ? 'data-open' : '' ?>><?php ui_section('入庫登記'); ?>
     <?php if ($options['goods'] && $options['sections']): ?>
         <form method="post" action="actions.php" class="field-grid panel-body">
             <?php ui_fields('stock_in'); ?>
@@ -102,7 +102,7 @@ if ($view === 'inventory'):
             <div><button class="button primary" type="submit">登記入庫</button></div>
         </form>
     <?php else: ui_no_records(!$options['goods'] ? '請先到「貨物管理」新增品項。' : '目前還沒有可用的儲區。'); endif; ?></section>
-    <section class="panel" id="stock-out-form"><?php ui_section('出庫登記'); ?>
+    <section class="panel" id="stock-out-form" data-drawer <?= $outValues ? 'data-open' : '' ?>><?php ui_section('出庫登記'); ?>
     <?php if ($available): ?>
         <form method="post" action="actions.php" class="field-grid panel-body">
             <?php ui_fields('stock_out'); ?>
@@ -116,9 +116,15 @@ if ($view === 'inventory'):
     <?php else: ui_no_records('目前沒有庫存可供出貨。'); endif; ?></section></div>
     <script src="assets/stock.js?v=20261126" defer></script>
 <?php endif;
-if (in_array($view, ['overview', 'movements'], true)): ?>
+if ($view === 'movements'): ?>
     <section class="panel"><?php ui_section('進出貨明細', $view === 'overview' ? 'movements' : null);
         if ($view === 'movements') ui_search($view, $q, '輸入貨名、批號或儲區');
         ui_movements($view === 'overview' ? array_slice($data['movements'], 0, 5) : $data['movements'], true, $q); ?></section>
 <?php endif;
+if ($view === 'inventory') ui_lot_details($data['inventory'], $options['movements']);
+if ($view === 'requests') {
+    ui_search($view, $q, '搜尋貨物或客戶');
+    ui_request_list($requests, true);
+    ui_request_details($requests, $data['sections'], true, ['request_complete' => take_form_input('request_complete'), 'request_reject' => take_form_input('request_reject')]);
+}
 ui_end();

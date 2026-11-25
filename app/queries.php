@@ -62,10 +62,38 @@ function dashboard_data(string $q = '', ?int $warehouseId = null): array
     );
     if ($user['role'] === 'employee') {
         $data['clients'] = rows('SELECT id, name FROM clients ORDER BY name');
-        $data['sections'] = rows(
-            'SELECT s.id, s.name, w.name AS warehouse_name, s.client_id, s.capacity
-             FROM sections s JOIN warehouses w ON s.warehouse_id = w.id ORDER BY w.name, s.name'
-        );
     }
+    $data['sections'] = rows(
+        'SELECT s.id, s.name, w.name AS warehouse_name, s.client_id, s.capacity
+         FROM sections s JOIN warehouses w ON s.warehouse_id = w.id'
+         . ($tenant !== null ? ' WHERE s.client_id = ?' : '') . ' ORDER BY w.name, s.name',
+        $tenant !== null ? [$tenant] : []
+    );
     return $data;
+}
+
+/** Query only requests owned by the signed-in client, or all for warehouse staff. */
+function request_data(string $q = ''): array
+{
+    $user = current_user();
+    if (!$user) go('index.php');
+    if (!in_array($user['role'], ['employee', 'client'], true)) return [];
+    $tenant = $user['role'] === 'client' ? (int)$user['client_id'] : null;
+    return dashboard_rows(
+        'SELECT r.id, r.type, r.status, r.quantity, r.created_at, r.handled_at, r.response_note,
+                g.id AS goods_id, g.name AS goods_name, g.unit, c.id AS client_id, c.name AS client_name,
+                r.stock_id, w.name AS warehouse_name, s.name AS section_name, i.quantity AS current_quantity,
+                e.name AS employee_name, m.stock_id AS result_stock_id
+         FROM stock_requests r
+         LEFT JOIN inventory i ON i.id = r.stock_id
+         JOIN goods g ON g.id = COALESCE(r.goods_id, i.goods_id)
+         JOIN clients c ON c.id = g.client_id
+         LEFT JOIN movements m ON m.id = r.movement_id
+         LEFT JOIN inventory result ON result.id = m.stock_id
+         LEFT JOIN sections s ON s.id = COALESCE(i.section_id, result.section_id)
+         LEFT JOIN warehouses w ON w.id = s.warehouse_id
+         LEFT JOIN employees e ON e.id = r.employee_id',
+        "(r.status = 'pending') DESC, r.created_at DESC, r.id DESC", $q,
+        ["CONCAT('#', r.id)", 'g.name', 'c.name'], $tenant
+    );
 }

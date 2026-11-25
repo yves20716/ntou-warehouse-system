@@ -38,7 +38,7 @@ if (!$employees): ui_no_records($q === '' ? '員工名冊目前沒有資料。' 
     </tr><?php endforeach; ?></tbody>
 </table></div><?php endif; ?></section>
 <?php if ($view === 'staff'): ?>
-    <section class="panel" id="staff-form"><?php ui_section($editId !== '' ? '編輯員工資料' : '新增員工');
+    <section class="panel" id="staff-form" data-drawer <?= $staffInput || $editId !== '' ? 'data-open' : '' ?>><?php ui_section($editId !== '' ? '編輯員工資料' : '新增員工');
         if ($editId !== '' && !$editing): ?>
         <div class="panel-body"><p class="form-note">找不到這位員工，可能已被刪除。請從員工名冊重新選擇。</p><a class="text-link" href="?view=staff">返回員工管理</a></div>
         <?php else: ?>

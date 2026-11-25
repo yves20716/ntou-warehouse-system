@@ -1,24 +1,25 @@
 <?php
 declare(strict_types=1);
 
-function save_goods(): string
+function save_goods(?int $owner = null): string
 {
     $id = input_id('id', '貨物編號', true);
-    $client = input_id('client_id', '客戶');
+    $client = $owner ?? input_id('client_id', '客戶');
     $name = input_text('name', '貨物名稱', 100);
     $unit = input_text('unit', '單位', 16);
-    transaction(function (PDO $conn) use ($id, $client, $name, $unit) {
+    transaction(function (PDO $conn) use ($id, $client, $name, $unit, $owner) {
         if ($id === null) {
             $conn->prepare('INSERT INTO goods (client_id, name, unit) VALUES (?, ?, ?)')->execute([$client, $name, $unit]);
             return;
         }
-        $old = rows('SELECT client_id, unit FROM goods WHERE id = ? FOR UPDATE', [$id])[0] ?? null;
+        $old = rows('SELECT client_id, unit FROM goods WHERE id = ?' . ($owner === null ? '' : ' AND client_id = ?') . ' FOR UPDATE', $owner === null ? [$id] : [$id, $owner])[0] ?? null;
         if (!$old) {
             throw new DomainException('找不到這筆貨物。');
         }
         if (((int)$old['client_id'] !== $client || $old['unit'] !== $unit)
-            && rows('SELECT id FROM inventory WHERE goods_id = ? LIMIT 1', [$id])) {
-            throw new DomainException('這筆貨物已有庫存紀錄，無法更換所屬客戶或計量單位。');
+            && (rows('SELECT id FROM inventory WHERE goods_id = ? LIMIT 1', [$id])
+                || rows('SELECT id FROM stock_requests WHERE goods_id = ? LIMIT 1', [$id]))) {
+            throw new DomainException('這筆貨物已有入庫或申請紀錄，無法更換所屬客戶或計量單位。');
         }
         $conn->prepare('UPDATE goods SET client_id = ?, name = ?, unit = ? WHERE id = ?')->execute([$client, $name, $unit, $id]);
     });
@@ -102,43 +103,55 @@ function save_employee(): string
     return $id === null ? "已將{$name}加入員工名冊。" : "已更新{$name}的員工資料。";
 }
 
+/** Must run inside the caller's transaction. */
+function record_stock_in(PDO $conn, int $goodsId, int $sectionId, int $quantity, int $employee): array
+{
+    $item = rows('SELECT client_id, unit FROM goods WHERE id = ? FOR UPDATE', [$goodsId])[0] ?? null;
+    $section = rows('SELECT client_id FROM sections WHERE id = ? FOR UPDATE', [$sectionId])[0] ?? null;
+    if (!$item || !$section || (int)$item['client_id'] !== (int)$section['client_id']) {
+        throw new DomainException('請選擇貨物所屬客戶承租的儲區。');
+    }
+    $conn->prepare('INSERT INTO inventory (goods_id, section_id, quantity, arrival_date)
+                    VALUES (?, ?, ?, CURRENT_DATE)')->execute([$goodsId, $sectionId, $quantity]);
+    $stockId = (int)$conn->lastInsertId();
+    $conn->prepare("INSERT INTO movements (stock_id, type, quantity, employee_id)
+                    VALUES (?, 'in', ?, ?)")->execute([$stockId, $quantity, $employee]);
+    return ['stock_id' => $stockId, 'movement_id' => (int)$conn->lastInsertId(), 'unit' => $item['unit']];
+}
+
+/** Must run inside the caller's transaction. */
+function record_stock_out(PDO $conn, int $stockId, int $quantity, int $employee): array
+{
+    $stock = rows('SELECT i.quantity, g.unit FROM inventory i JOIN goods g ON g.id = i.goods_id
+                   WHERE i.id = ? FOR UPDATE OF i', [$stockId])[0] ?? null;
+    if (!$stock) {
+        throw new DomainException('找不到這個庫存批次，請重新選擇。');
+    }
+    $remaining = (int)$stock['quantity'] - $quantity;
+    if ($remaining < 0) {
+        throw new DomainException(sprintf('批號 #%d 只剩 %s %s，請調整出庫數量。', $stockId, number_format((int)$stock['quantity']), $stock['unit']));
+    }
+    $conn->prepare('UPDATE inventory SET quantity = quantity - ? WHERE id = ?')->execute([$quantity, $stockId]);
+    $conn->prepare("INSERT INTO movements (stock_id, type, quantity, employee_id)
+                    VALUES (?, 'out', ?, ?)")->execute([$stockId, $quantity, $employee]);
+    return ['stock_id' => $stockId, 'movement_id' => (int)$conn->lastInsertId(), 'unit' => $stock['unit'], 'remaining' => $remaining];
+}
+
 function stock_in(int $employee): string
 {
     $goodsId = input_id('goods_id', '貨物');
     $sectionId = input_id('section_id', '儲區');
     $quantity = input_id('quantity', '入庫數量');
-    return transaction(function (PDO $conn) use ($goodsId, $sectionId, $quantity, $employee): string {
-        $item = rows('SELECT client_id, unit FROM goods WHERE id = ? FOR UPDATE', [$goodsId])[0] ?? null;
-        $section = rows('SELECT client_id FROM sections WHERE id = ? FOR UPDATE', [$sectionId])[0] ?? null;
-        if (!$item || !$section || (int)$item['client_id'] !== (int)$section['client_id']) {
-            throw new DomainException('請選擇貨物所屬客戶承租的儲區。');
-        }
-        $conn->prepare('INSERT INTO inventory (goods_id, section_id, quantity, arrival_date)
-                        VALUES (?, ?, ?, CURRENT_DATE)')->execute([$goodsId, $sectionId, $quantity]);
-        $stockId = (int)$conn->lastInsertId();
-        $conn->prepare("INSERT INTO movements (stock_id, type, quantity, employee_id)
-                        VALUES (?, 'in', ?, ?)")->execute([$stockId, $quantity, $employee]);
-        return sprintf('已入庫 %s %s，批號 #%d。', number_format($quantity), $item['unit'], $stockId);
-    });
+    $result = transaction(fn(PDO $conn) => record_stock_in($conn, $goodsId, $sectionId, $quantity, $employee));
+    return sprintf('已入庫 %s %s，批號 #%d。', number_format($quantity), $result['unit'], $result['stock_id']);
 }
 
 function stock_out(int $employee): string
 {
     $stockId = input_id('stock_id', '庫存批次');
     $quantity = input_id('quantity', '出庫數量');
-    return transaction(function (PDO $conn) use ($stockId, $quantity, $employee): string {
-        $stock = rows('SELECT i.quantity, g.unit FROM inventory i JOIN goods g ON g.id = i.goods_id
-                       WHERE i.id = ? FOR UPDATE OF i', [$stockId])[0] ?? null;
-        if (!$stock) {
-            throw new DomainException('找不到這個庫存批次，請重新選擇。');
-        }
-        $remaining = (int)$stock['quantity'] - $quantity;
-        if ($remaining < 0) {
-            throw new DomainException(sprintf('批號 #%d 只剩 %s %s，請調整出庫數量。', $stockId, number_format((int)$stock['quantity']), $stock['unit']));
-        }
-        $conn->prepare('UPDATE inventory SET quantity = quantity - ? WHERE id = ?')->execute([$quantity, $stockId]);
-        $conn->prepare("INSERT INTO movements (stock_id, type, quantity, employee_id)
-                        VALUES (?, 'out', ?, ?)")->execute([$stockId, $quantity, $employee]);
-        return sprintf('已出庫 %s %s，批號 #%d 剩餘 %s %s。', number_format($quantity), $stock['unit'], $stockId, number_format($remaining), $stock['unit']);
-    });
+    $result = transaction(fn(PDO $conn) => record_stock_out($conn, $stockId, $quantity, $employee));
+    return sprintf('已出庫 %s %s，批號 #%d 剩餘 %s %s。', number_format($quantity), $result['unit'], $stockId, number_format($result['remaining']), $result['unit']);
 }
+
+require_once __DIR__ . '/requests.php';

@@ -109,6 +109,12 @@ function remember_form_input(string $action): void
 {
     $fields = match ($action) {
         'goods_save' => ['id', 'client_id', 'name', 'unit'],
+        'client_goods_save' => ['id', 'name', 'unit'],
+        'client_request_in' => ['goods_id', 'quantity'],
+        'client_request_out' => ['stock_id', 'quantity'],
+        'client_request_cancel' => ['id'],
+        'request_complete' => ['id', 'section_id'],
+        'request_reject' => ['id', 'response_note'],
         'employee_save' => ['id', 'name', 'job_title', 'hourly_rate', 'manager_id', 'birth_date', 'overtime_hours', 'insurer'],
         'stock_in' => ['goods_id', 'section_id', 'quantity'],
         'stock_out' => ['stock_id', 'quantity'],

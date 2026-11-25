@@ -16,8 +16,10 @@ function ui_head(string $title): void { ?>
     <title><?= h($title) ?> ｜ NEXUS WMS</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="assets/styles.css?v=20261126b">
+    <link rel="stylesheet" href="assets/workspace.css?v=20261126c">
     <script src="assets/app.js?v=20261126b" defer></script>
     <script src="assets/table-tools.js?v=20261126b" defer></script>
+    <script src="assets/workbench.js?v=20261126c" defer></script>
 </head>
 <body>
 <?php }
@@ -33,53 +35,46 @@ function ui_flash(): void {
     <?php endif;
 }
 
-function ui_fields(string $action): void { ?>
+function ui_fields(string $action): void {
+    // One token per action in this response. A successful POST redirects and renders fresh tokens.
+    static $pageTokens = [];
+    ?>
     <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
     <input type="hidden" name="action" value="<?= h($action) ?>">
-    <?php if (in_array($action, ['goods_save', 'goods_delete', 'stock_in', 'stock_out', 'employee_save', 'employee_delete'], true)): ?>
-        <input type="hidden" name="mutation_token" value="<?= h(mutation_token($action)) ?>">
+    <?php if (in_array($action, ['goods_save', 'goods_delete', 'stock_in', 'stock_out', 'employee_save', 'employee_delete', 'client_goods_save', 'client_request_in', 'client_request_out', 'client_request_cancel', 'request_complete', 'request_reject'], true)): ?>
+        <input type="hidden" name="mutation_token" value="<?= h($pageTokens[$action] ??= mutation_token($action)) ?>">
     <?php endif; ?>
 <?php }
 
 function ui_page(array $user, array $nav, string $view, string $subtitle): void {
-    $titles = ['employee' => '倉儲作業', 'client' => '客戶專區', 'hr' => '人資管理'];
-    $role = $titles[$user['role']];
+    $role = ['employee' => '倉儲作業', 'client' => '客戶專區', 'hr' => '人資管理'][$user['role']];
     $title = $nav[$view];
-    $icons = ['overview' => '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>', 'goods' => '<path d="m3 7 9-4 9 4v10l-9 4-9-4V7Zm0 0 9 4 9-4M12 11v10M7 5l9 4"/>', 'inventory' => '<path d="M3 10 12 3l9 7v11H3V10Zm4 11V10h10v11M7 14h10M7 18h10"/>', 'movements' => '<path d="M3 7h18m-5-5 5 5-5 5M21 17H3l5-5m-5 5 5 5"/>', 'staff' => '<circle cx="9" cy="7" r="4"/><path d="M2 21v-3a7 7 0 0 1 14 0v3M16 3a4 4 0 0 1 0 8m3 3a6 6 0 0 1 3 5v2"/>'];
-    $today = new DateTimeImmutable('now', new DateTimeZone('Asia/Taipei'));
     ui_head($title); ?>
 <a class="skip-link" href="#main">跳至主要內容</a>
-<div class="shell">
-    <aside class="side">
-        <?php ui_brand(); ?>
-        <span class="nav-caption"><?= h($role) ?></span>
-        <nav aria-label="<?= h($role) ?>導覽">
-            <?php foreach ($nav as $key => $label): ?>
-            <a href="?view=<?= h($key) ?>" <?= $key === $view ? 'aria-current="page"' : '' ?>><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><?= $icons[$key] ?></svg><?= h($label) ?></a>
-            <?php endforeach; ?>
-        </nav>
-        <form class="logout" method="post" action="actions.php">
-            <?php ui_fields('logout'); ?><button type="submit">登出帳號 <span aria-hidden="true">↗</span></button>
-        </form>
-    </aside>
-    <div class="workspace">
-        <header class="topbar"><span>公共倉儲管理系統 <span class="crumb">／ <?= h($role) ?></span></span><div class="account"><time datetime="<?= h($today->format('Y-m-d')) ?>"><?= h($today->format('Y.m.d')) ?></time><span class="signed-in"><span class="avatar" aria-hidden="true"><?= h($user['role'] === 'client' ? '客' : ($user['role'] === 'hr' ? '人' : '倉')) ?></span><span><?= h($user['display_name']) ?><small><?= h($role) ?></small></span></span></div></header>
-        <main id="main" class="main" data-view="<?= h($view) ?>">
-            <header class="page-heading"><div><span class="page-kicker">NEXUS / <?= h($role) ?></span><h1><?= h($title) ?></h1><p><?= h($subtitle) ?></p></div>
-                <div class="heading-actions">
-                <?php if ($user['role'] === 'employee'): ?>
-                    <?php if ($view === 'goods'): ?><a class="button primary" href="?view=goods#goods-form">＋ 新增貨物</a>
-                    <?php else: ?><a class="button" href="<?= $view === 'inventory' ? '#stock-out-form' : '?view=inventory#stock-out-form' ?>">登記出庫 <span aria-hidden="true">↗</span></a><a class="button primary" href="<?= $view === 'inventory' ? '#stock-in-form' : '?view=inventory#stock-in-form' ?>">登記入庫 <span aria-hidden="true">↙</span></a><?php endif; ?>
-                <?php elseif ($user['role'] === 'hr'): ?><a class="button primary" href="?view=staff#staff-form">＋ 新增員工</a>
-                <?php elseif ($view !== 'movements'): ?><a class="button" href="?view=movements">查看進出貨 <span aria-hidden="true">↗</span></a><?php endif; ?>
-                </div>
-            </header>
-            <?php ui_flash();
+<div class="shell" data-role="<?= h($user['role']) ?>">
+    <header class="app-bar">
+        <a class="brand-home" href="?view=overview" aria-label="回到<?= h($role) ?>首頁"><?php ui_brand(); ?></a>
+        <span class="app-role"><?= h($role) ?></span>
+        <div class="account"><span class="account-name"><?= h($user['display_name']) ?></span><form method="post" action="actions.php"><?php ui_fields('logout'); ?><button class="logout-button" type="submit">登出</button></form></div>
+    </header>
+    <nav class="workspace-nav" aria-label="<?= h($role) ?>導覽"><?php foreach ($nav as $key => $label): ?>
+        <a href="?view=<?= h($key) ?>" <?= $key === $view ? 'aria-current="page"' : '' ?>><?= h($label) ?></a>
+    <?php endforeach; ?></nav>
+    <main id="main" class="main" data-view="<?= h($view) ?>">
+        <header class="page-heading"><div><h1><?= h($title) ?></h1><p><?= h($subtitle) ?></p></div>
+        <div class="heading-actions">
+        <?php if ($user['role'] === 'employee'): ?>
+            <?php if ($view === 'goods'): ?><a class="button primary" href="?view=goods#goods-form">＋ 新增貨物</a>
+            <?php elseif ($view !== 'requests'): ?><a class="button" href="<?= $view === 'inventory' ? '#stock-out-form' : '?view=inventory#stock-out-form' ?>">登記出庫</a><a class="button primary" href="<?= $view === 'inventory' ? '#stock-in-form' : '?view=inventory#stock-in-form' ?>">＋ 登記入庫</a><?php endif; ?>
+        <?php elseif ($user['role'] === 'hr'): ?><a class="button primary" href="?view=staff#staff-form">＋ 新增員工</a>
+        <?php elseif ($view === 'goods'): ?><a class="button primary" href="?view=goods#client-goods-form">＋ 建立品項</a>
+        <?php else: ?><a class="button" href="?view=inventory">選貨出庫</a><a class="button primary" href="?view=requests#request-in-form">＋ 申請入庫</a><?php endif; ?>
+        </div></header>
+        <?php ui_flash();
 }
 
 function ui_end(): void { ?>
-        </main>
-    </div>
+    </main>
 </div>
 </body>
 </html>
@@ -113,15 +108,20 @@ function ui_no_records(string $message): void { ?>
 <?php }
 
 function ui_inventory(array $rows, bool $showClient, string $q = ''): void {
-    if (!$rows) { ui_no_records($q === '' ? '目前還沒有入庫的貨物。' : '找不到符合搜尋條件的庫存批次。'); return; } ?>
-    <div class="table-scroll" tabindex="0" role="region" aria-label="庫存批次"><table>
-    <thead><tr><th scope="col">批號</th><th scope="col">貨物名稱</th><?php if ($showClient): ?><th scope="col">客戶</th><?php endif; ?><th scope="col">倉庫／儲區</th><th scope="col">庫存量</th><th scope="col">到倉日</th><th scope="col">狀態</th><?php if ($showClient): ?><th scope="col">操作</th><?php endif; ?></tr></thead>
+    if (!$rows) { ui_no_records($q === '' ? '還沒有入庫批次。' : '找不到符合條件的批次，請換個關鍵字。'); return; }
+    $onInventory = ui_text('view') === 'inventory'; ?>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="庫存批次"><table class="inventory-table">
+    <thead><tr><th scope="col">貨物／批次</th><th scope="col">存放位置</th><th scope="col">剩餘數量</th><th scope="col">到倉日</th><th scope="col">操作</th></tr></thead>
     <tbody><?php foreach ($rows as $row): ?><tr>
-        <td class="ref">#<?= h($row['id']) ?></td><td><?= h($row['goods_name']) ?></td>
-        <?php if ($showClient): ?><td><?= h($row['client_name']) ?></td><?php endif; ?>
-        <td><?= h($row['warehouse_name']) ?>／<?= h($row['section_name']) ?></td><td class="num"><?= number_format((int)$row['quantity']) ?> <?= h($row['unit']) ?></td>
-        <td class="num"><?= h(substr($row['arrival_date'], 0, 10)) ?></td><td><?= $row['status'] === 'depleted' ? '<span class="pill gray">已出清</span>' : '<span class="pill green">在庫</span>' ?></td>
-        <?php if ($showClient): ?><td><?php if ((int)$row['quantity'] > 0): ?><a class="batch-action" aria-label="從批次 #<?= h($row['id']) ?> 出庫" href="?view=inventory&amp;out=<?= h($row['id']) ?>#stock-out-form">出庫 <span aria-hidden="true">↗</span></a><?php else: ?><span class="muted">—</span><?php endif; ?></td><?php endif; ?>
+        <td data-label="貨物"><a class="record-title" href="#lot-<?= h($row['id']) ?>"><?= h($row['goods_name']) ?></a><small class="record-sub">批次 #<?= h($row['id']) ?><?= $showClient ? ' · '.h($row['client_name']) : '' ?></small></td>
+        <td data-label="存放位置"><?= h($row['warehouse_name']) ?><small class="record-sub"><?= h($row['section_name']) ?></small></td>
+        <td data-label="剩餘數量"><strong class="balance"><?= number_format((int)$row['quantity']) ?></strong> <?= h($row['unit']) ?><small class="record-sub"><?= $row['status'] === 'depleted' ? '<span class="pill gray">已出清</span>' : '<span class="pill green">在庫</span>' ?></small></td>
+        <td data-label="到倉日" class="num"><?= h(substr($row['arrival_date'], 0, 10)) ?></td>
+        <td data-label="操作"><div class="row-actions"><a href="#lot-<?= h($row['id']) ?>">明細</a>
+        <?php if ((int)$row['quantity'] > 0): ?>
+            <?php if ($showClient): ?><a class="batch-action" data-stock-id="<?= h($row['id']) ?>" aria-label="從批次 #<?= h($row['id']) ?> 出庫" href="<?= $onInventory ? '#stock-out-form' : '?view=inventory&amp;out='.h($row['id']).'#stock-out-form' ?>">出庫 →</a>
+            <?php else: ?><a class="batch-action" aria-label="申請批次 #<?= h($row['id']) ?> 出庫" href="?view=requests&amp;out=<?= h($row['id']) ?>#request-out-form">申請出庫 →</a><?php endif; ?>
+        <?php endif; ?></div></td>
     </tr><?php endforeach; ?></tbody></table></div>
 <?php }
 

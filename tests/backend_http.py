@@ -7,6 +7,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode, urljoin, urlsplit
 from urllib.request import HTTPCookieProcessor, HTTPRedirectHandler, ProxyHandler, Request, build_opener
 import sys
+import re
 import uuid
 
 
@@ -76,7 +77,7 @@ class Page(HTMLParser):
         return self
 
     def record(self, name):
-        matches = [row for row in self.rows if name in row]
+        matches = [row for row in self.rows if any(name in cell for cell in row)]
         assert len(matches) == 1, (name, matches)
         return matches[0]
 
@@ -160,15 +161,15 @@ def run(base):
     token = page.form("stock_in")["fields"]
     payload = token | {"goods_id": goods_id, "section_id": "1", "quantity": "10"}
     created = employee.fetch("actions.php", payload).outcome("success")
-    batch = created.record(name)[0].lstrip("#")
+    batch = re.search(r"批次\s+#(\d+)", " ".join(created.record(name))).group(1)
     employee.fetch("actions.php", payload).outcome("error")
-    assert len([r for r in employee.view("inventory").rows if name in r]) == 1
+    assert len([r for r in employee.view("inventory").rows if any(name in cell for cell in r)]) == 1
     out = employee.view("inventory").form("stock_out")["fields"] | {"stock_id": batch, "quantity": "3"}
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(lambda _: employee.fetch("actions.php", out, redirect=False), range(2)))
     assert all(page.status == 303 for page in results)
     row = employee.view("inventory").record(name)
-    assert "7 箱" in row, row
+    assert any("7 箱" in cell for cell in row), row
     employee.submit(employee.view("inventory"), "stock_out", {"stock_id": batch, "quantity": "8"}, expected="error")
     employee.submit(employee.view("inventory"), "stock_in", {"goods_id": goods_id, "section_id": "3", "quantity": "1"}, expected="error")
     protected = employee.submit(employee.view("goods"), "goods_delete", record_id=goods_id, expected="error")
