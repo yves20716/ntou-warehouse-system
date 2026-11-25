@@ -4,7 +4,7 @@
 
 [GitHub Actions](https://github.com/yves20716/ntou-warehouse-system/actions/workflows/demo.yml) 會在乾淨的 Ubuntu 24.04 amd64 與 arm64 主機上，分別驗證本機示範版與正式部署版。也可從該頁按 **Run workflow** 重新執行。
 
-檢查內容包括空資料卷建表、示範資料筆數、四個帳號登入、客戶申請入庫 10／倉儲確認、出庫 3 後餘量為 7、取消及未受理、客戶隔離、人資新增修改刪除，以及關閉再啟動後資料是否完整保留。正式部署版另外測 Apache、Caddy 本機 HTTPS 憑證、Secure Cookie、私人檔案無法存取、CLI 建帳號、限制資料庫權限、備份還原及舊版 migration。
+檢查內容包括空資料卷建表、示範資料筆數、四個帳號登入、客戶申請入庫 10／倉儲確認、出庫 3 後餘量為 7、取消及未受理、客戶隔離、人員資料新增修改刪除，以及關閉再啟動後資料是否完整保留。帳號檢查涵蓋待啟用、停用、密碼重設、憑證單次使用與角色限制。正式部署版另外測 Apache、Caddy 本機 HTTPS 憑證、Secure Cookie、私人檔案無法存取、CLI 建帳號、限制資料庫權限、備份還原及舊版 migration。
 
 `docker_verify.py` 負責啟動與檢查容器，僅允許在測試結束後銷毀的 GitHub Actions 主機上執行。`docker_smoke.py` 透過 HTTP 表單測試操作，會新增有識別碼的貨物、申請、批次與紀錄，須使用獨立測試環境。
 
@@ -36,6 +36,7 @@ php tests/dashboard_db.php
 php tests/requests_db.php
 python3 tests/requests_http.py http://127.0.0.1:18767
 python3 tests/deployment_http.py http://127.0.0.1:18767
+python3 tests/account_http.py http://127.0.0.1:18767
 ```
 
 - `backend_http.py`：檢查登入權限、客戶資料隔離、表單重送、欄位驗證、錯誤後保留輸入及主管關係。使用種子資料中的示範帳號。
@@ -45,9 +46,11 @@ python3 tests/deployment_http.py http://127.0.0.1:18767
 - `requests_http.py`：檢查申請表單的角色限制、CSRF、重送保護及客戶之間的資料隔離。
 - `deployment_http.py`：檢查 CLI 建立三種登入帳號、拒絕重複或無效關聯，以及改密碼後舊登入狀態是否失效。使用獨立隨機密碼，在 QA 留下有識別碼的帳號；最後一個可選參數可指定 PHP 執行檔。
 
+- `account_http.py`：檢查一般帳號建立與啟用、禁止建立管理員或更換既有身分、憑證重發／過期／單次使用，以及停用、離職、要求重設後的登入失效。也核對管理紀錄保留操作人與對象，且沒有密碼或完整憑證。最後一個可選參數可指定 PHP 執行檔。
+
 `dashboard_db.php` 會回復整筆測試交易，其餘測試會在 QA 資料庫保留有識別碼的資料。PHP 測試僅接受名稱為 `warehouse_qa` 的資料庫，HTTP 測試僅接受本機的 18767 連接埠。
 
-既有 QA 資料庫須先由具建表權限的管理帳號執行 `database/migrations/20261126-stock-requests.sql`；測試網站仍使用只具 QA 資料庫讀寫權限的帳號。
+既有 QA 資料庫須先由具建表及 CREATE ROUTINE 權限的管理帳號依序套用 migration：尚無申請表時執行 `database/migrations/20261126-stock-requests.sql`，再執行 `database/migrations/20261126-account-management.sql`。測試網站仍使用只具 QA 資料庫讀寫權限的帳號。
 
 表單代碼檢查可直接執行，無須連線至資料庫：
 

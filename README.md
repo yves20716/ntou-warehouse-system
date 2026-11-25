@@ -1,11 +1,11 @@
 # NEXUS WMS 公共倉儲管理系統
 
-海大資料庫系統期末專題，以 PHP 與 MySQL 建置。客戶可建立貨物品項、申請入庫或出庫、查詢處理進度；倉儲員工確認收發後更新庫存，記錄每批貨物的儲區與進出數量。人資透過獨立頁面維護員工資料。
+海大資料庫系統期末專題，以 PHP 與 MySQL 建置。客戶可建立貨物品項、申請入庫或出庫、查詢處理進度；倉儲員工確認收發後更新庫存，記錄每批貨物的儲區與進出數量。管理員維護登入帳號、員工資料與帳號啟停紀錄。
 
 | 用途 | 說明 |
 | --- | --- |
 | 本機安裝 | 下方「在本機啟動」 |
-| 客戶、倉儲與人資操作 | [完整使用流程](docs/USAGE.md) |
+| 客戶、倉儲與管理員操作 | [完整使用流程](docs/USAGE.md) |
 | 網路部署 | [網路部署、建帳號與備份](docs/DEPLOYMENT.md) |
 | 程式與資料庫測試 | [回歸測試](tests/README.md) |
 
@@ -33,7 +33,7 @@ docker compose ps
 | `client` | 海岬選物 | 建立／編輯自己的貨物、提出或取消收發申請、查看庫存與紀錄 |
 | `client2` | 山線器材 | 另一家客戶的相同功能，用來比較兩個客戶的可見範圍 |
 | `employee` | 倉儲員工 | 管理貨物、處理客戶申請、登記實際收發 |
-| `hr` | 人資 | 新增、查詢、修改及刪除員工，設定職務、薪資與主管 |
+| `hr` | 帳號與人員管理員 | 管理一般帳號、啟停與重設需求，維護員工資料並查閱管理紀錄 |
 
 ## 進出貨操作範例
 
@@ -46,6 +46,18 @@ docker compose ps
 出庫申請不會預扣或保留庫存；實際完成時會再次檢查餘量。每筆申請只能處理一次。倉儲員工仍可直接登記現場收發。新增、編輯、申請與批次明細以側邊面板開啟，關閉後保留原清單位置；若有未儲存的修改，會提示確認。
 
 每個儲區由一位客戶承租。出庫數量必須小於或等於該批餘量。庫存更新與進出貨紀錄在同一筆 MySQL 交易中寫入；已有批次或入庫申請的貨物會保留，方便日後回查。儲區容量是參考資料，貨物依「箱」、「台」等各自的單位記錄。
+
+## 帳號建立與啟用
+
+管理員在「帳號管理」建立倉儲員工或客戶帳號，選取既有身分。新帳號先顯示「待啟用」，由主機管理者產生一次性連結交給本人：
+
+```sh
+docker compose exec -T web php bin/account.php invite warehouse-user --base-url http://localhost:8080
+```
+
+將 `warehouse-user` 換成建立的帳號，網址須對應該網站。連結有效 30 分鐘，使用一次即失效；重發會使舊連結失效。本人設定密碼後即可登入。正式網站改用 HTTPS 網域，完整指令見[部署說明](docs/DEPLOYMENT.md)。
+
+管理員可啟停一般帳號及提出重設需求；密碼與連結不顯示在管理頁。網站不能建立管理員、調整既有帳號角色、改綁客戶或代登入。
 
 ## 已有 PHP 與 MySQL 的環境
 
@@ -71,7 +83,8 @@ php -S 127.0.0.1:8080 -t public
 | `public/index.php` | 登入 |
 | `public/client.php` | 客戶貨物建檔、申請與查詢 |
 | `public/employee.php` | 貨物、庫存與進出貨 |
-| `public/hr.php` | 人事管理 |
+| `public/admin.php` | 帳號、人員、權限一覽與管理紀錄 |
+| `public/hr.php` | 舊版人資頁面入口，轉至管理頁面 |
 | `public/actions.php` | 接收表單、檢查登入身分、執行對應操作 |
 | `app/` | 資料庫連線、工作階段、查詢和更新邏輯 |
 | `database/01-schema.sql` | 資料表、主外鍵及欄位限制 |
@@ -79,29 +92,39 @@ php -S 127.0.0.1:8080 -t public
 
 一座倉庫（`warehouses`）可分成多個儲區（`sections`）。客戶（`clients`）承租儲區並擁有貨物（`goods`）。每次入庫建立一個批次（`inventory`），每筆異動（`movements`）連回批次及承辦員工（`employees`）。登入帳號（`users`）連回對應的客戶或員工，以決定能查閱的資料與可執行的操作。
 
-收發申請使用 `stock_requests`，共 9 張資料表、14 個外鍵。入庫申請連到貨物；出庫申請連到指定批次。完成時連到實際產生的進出貨紀錄與承辦員工。取消及未受理申請也會保留。
+收發申請使用 `stock_requests`。入庫申請連到貨物；出庫申請連到指定批次。完成時連到實際產生的進出貨紀錄與承辦員工。取消及未受理申請也會保留。
+
+帳號啟用與密碼重設使用 `account_tokens`，管理操作記錄於 `admin_audit`。目前共 11 張資料表、18 個外鍵。帳號停用或員工離職後，既有登入會失效，原收發紀錄仍可查詢。
 
 ## 更新已有的資料庫
 
-舊版資料庫請保留原資料卷，執行下列 migration 新增收發申請表。更新時勿重新匯入示範資料。
+先備份，再更新程式；保留原資料卷，勿重新匯入示範資料。只有 8 張表的舊版須先新增收發申請表，接著執行帳號管理 migration。
 
 ```sh
-docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysql -u"$MYSQL_USER" "$MYSQL_DATABASE"' < database/migrations/20261126-stock-requests.sql
+# 僅供尚無 stock_requests 的安裝：
+docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot "$MYSQL_DATABASE"' < database/migrations/20261126-stock-requests.sql
+
+# 新增帳號狀態、月薪、一次性憑證與管理紀錄：
+docker compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot "$MYSQL_DATABASE"' < database/migrations/20261126-account-management.sql
 ```
 
-使用自行安裝的 MySQL 時：
+使用自行安裝的 MySQL 時，以具建表及 CREATE ROUTINE 權限的管理帳號執行：
 
 ```sh
+# 僅供尚無 stock_requests 的安裝：
 mysql -u root -p warehouse < database/migrations/20261126-stock-requests.sql
+mysql -u root -p warehouse < database/migrations/20261126-account-management.sql
 ```
 
-全新安裝已包含收發申請表。公開儲存庫提供程式、建表檔與虛構的示範資料；帳密設定、操作紀錄與含個資的報告應存放於私人位置。
+升級會將 `hr` 角色改為 `admin`，保留原使用者名稱與密碼。既有員工的月薪留空，畫面顯示「未設定」；原時薪保留供核對，不自動換算。全新安裝直接使用完整 schema，示範員工則填入虛構月薪。
+
+公開儲存庫提供程式、建表檔與虛構示範資料。帳密設定、一次性連結、備份、管理紀錄與含個資的報告應存放於私人位置。
 
 ## 啟動問題排查
 
 - 網頁連不上：先執行 `docker compose ps` 確認 `db` 已 healthy、`web` 已啟動，再用 `docker compose logs --tail=50 web db` 查看錯誤。首次下載映像與初始化需要一些時間。
 - 登入失敗：公開 seed 的密碼是 `WarehouseDemo!26`；已有資料卷會沿用舊資料，不會在更新程式時重設帳密。
-- 缺少收發申請表：依上方 migration 更新，保留既有資料卷，勿重新匯入示範資料。
+- 升級後出現缺少資料表或欄位：依上方順序執行 migration，保留既有資料卷，勿重新匯入示範資料。
 - 跨電腦連線：本機版只接受 loopback 連線。請依 [HTTPS 部署流程](docs/DEPLOYMENT.md) 設定主機與網域。
 
-2026-11-26 已在 Ubuntu 24.04 amd64、arm64 的全新環境完成 Docker 測試。本機示範版與 HTTPS 部署版均通過建表、登入、收發及重啟後資料保留的檢查，詳見 [Docker 驗證紀錄](docs/DOCKER-VERIFICATION.md)。
+2026-11-26 已在 Ubuntu 24.04 amd64、arm64 的全新環境完成 Docker 測試。本機示範版與 HTTPS 部署版均通過建表、登入、收發、帳號管理及重啟後資料保留的檢查，詳見 [Docker 驗證紀錄](docs/DOCKER-VERIFICATION.md)。
