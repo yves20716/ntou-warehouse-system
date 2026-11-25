@@ -9,6 +9,7 @@
 `docker_verify.py` 負責啟動與檢查容器，僅允許在可拋棄的 GitHub Actions 主機上執行。`docker_smoke.py` 則透過實際 HTTP 表單測試操作；它會新增有識別碼的貨物、申請、批次與紀錄，**只在另外建立的測試環境使用**。
 
 ```sh
+mkdir -p .local
 python3 tests/docker_smoke.py --base http://127.0.0.1:8080 --mode seeded --output .local/docker-seeded.json
 # 關閉再啟動容器後，只讀取上一次的測試資料：
 python3 tests/docker_smoke.py --base http://127.0.0.1:8080 --mode seeded --output .local/docker-seeded.json --verify-only

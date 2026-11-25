@@ -105,4 +105,4 @@ mysql -u root -p warehouse < database/migrations/20261126-stock-requests.sql
 - 換了程式卻沒有新表：依上方 migration 更新；不要重新匯入 seed 或刪掉既有資料卷。
 - 想從另一台電腦使用：本機版只綁定 loopback，不是共用服務。請依 [HTTPS 部署流程](docs/DEPLOYMENT.md) 架設，再提供自己的網域。
 
-目前工作環境未安裝 Docker；PHP／MySQL 操作已做獨立測試，容器設定與文件已檢查，但仍需在實際 Docker 主機完成啟動驗證。
+已於 2026-11-26 在乾淨的 Ubuntu 24.04 amd64、arm64 主機實際執行 Docker 建置與啟動。本機示範版與 HTTPS 部署版都通過建表、登入、收發、重啟保留資料等檢查；完整結果見 [Docker 驗證紀錄](docs/DOCKER-VERIFICATION.md)。組員準備好可運作的 Docker 與 Compose 後，可依本頁步驟建立自己的網站與資料庫。

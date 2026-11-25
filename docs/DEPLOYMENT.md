@@ -137,4 +137,6 @@ git pull --ff-only
 
 ## 驗證範圍
 
-PHP 與 MySQL 的登入、角色限制及收發流程有獨立的回歸測試，見[測試說明](../tests/README.md)。部署設定已做檔案與語法檢查；目前工作環境沒有 Docker，尚未完成容器啟動與公開網域的實機驗證。實際部署時仍需完成上述 HTTPS、帳號及收發檢查，才可當成已上線。
+2026-11-26 已在 Ubuntu 24.04 amd64 與 arm64 上實際啟動這份設定，完成空資料庫建表、基本資料匯入、CLI 建帳號、資料庫降權、完整收發、重啟保留資料、備份還原及舊版 migration。Apache 與 Caddy 使用 `https://localhost` 測試，會驗證本機 CA 憑證、HTTP 轉址及 Secure Cookie，沒有關閉 TLS 檢查。[完整紀錄與執行連結](DOCKER-VERIFICATION.md)
+
+這次沒有部署到公開網域。正式上線時，仍需在自己的主機確認 DNS、80／443 對外連通，以及公開憑證簽發。其他功能的回歸測試見[測試說明](../tests/README.md)。
