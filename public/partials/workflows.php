@@ -7,8 +7,8 @@ function request_label(string $status): string {
 
 function ui_request_list(array $requests, bool $employee, bool $preview = false): void { ?>
     <section class="panel request-list">
-        <?php ui_section($preview ? ($employee ? '等待處理的申請' : '我的申請進度') : '收發申請', $preview ? 'requests' : null); ?>
-        <?php if (!$requests): ?><div class="quiet-empty"><span aria-hidden="true">✓</span><h3><?= $employee ? '目前沒有待處理申請' : '目前沒有收發申請' ?></h3><p><?= $employee ? '客戶送出後，會出現在這裡。' : '貨物要送進倉庫時，先建立品項，再填寫入庫數量。' ?></p><?php if (!$employee): ?><a class="text-link" href="?view=requests#request-in-form">填寫入庫申請 →</a><?php endif; ?></div>
+        <?php ui_section($preview ? ($employee ? '待處理申請' : '我的申請') : '收發申請', $preview ? 'requests' : null); ?>
+        <?php if (!$requests): ?><div class="quiet-empty"><h3><?= $employee ? '目前沒有待處理申請' : '目前沒有收發申請' ?></h3><?php if (!$employee): ?><a class="text-link" href="?view=requests#request-in-form">申請入庫 →</a><?php endif; ?></div>
         <?php else: ?>
         <div class="table-scroll" tabindex="0" role="region" aria-label="收發申請"><table class="request-table"><thead><tr><th scope="col">申請內容</th><th scope="col"><?= $employee ? '客戶' : '送出時間' ?></th><th scope="col">進度</th><th scope="col">操作</th></tr></thead><tbody>
             <?php foreach ($requests as $r): ?><tr>
@@ -46,11 +46,11 @@ function ui_request_details(array $requests, array $sections, bool $employee, ar
                     <?php ui_fields('request_complete'); ?><input type="hidden" name="id" value="<?= h($r['id']) ?>">
                     <h3>確認本次收發</h3>
                     <?php if ($r['type'] === 'in'): ?><label>實際收貨儲區<select name="section_id" required><option value="">選擇儲區</option><?php foreach ($sections as $section): if ((int)$section['client_id'] !== (int)$r['client_id']) continue; ?><option value="<?= h($section['id']) ?>" <?= (string)($formInputs['request_complete']['id'] ?? '') === (string)$r['id'] && (string)($formInputs['request_complete']['section_id'] ?? '') === (string)$section['id'] ? 'selected' : '' ?>><?= h($section['warehouse_name']) ?>／<?= h($section['name']) ?></option><?php endforeach; ?></select></label><?php endif; ?>
-                    <p class="form-note"><?= $r['type'] === 'in' ? '確認已收到貨物後再完成。系統會建立庫存批次與入庫紀錄。' : '確認已交出貨物後再完成。系統會扣除指定批次的庫存並留下出庫紀錄。' ?></p>
+                    <p class="form-note"><?= $r['type'] === 'in' ? '確認實際收貨後完成入庫。' : '確認實際交貨後完成出庫。' ?></p>
                     <button class="button primary" type="submit">確認<?= $r['type'] === 'in' ? '入庫' : '出庫' ?> <?= number_format((int)$r['quantity']) ?> <?= h($r['unit']) ?></button>
                 </form>
-                <details class="request-reject panel-body" <?= (string)($formInputs['request_reject']['id'] ?? '') === (string)$r['id'] ? 'open' : '' ?>><summary>無法受理這筆申請</summary><form class="field-grid" method="post" action="actions.php"><?php ui_fields('request_reject'); ?><input type="hidden" name="id" value="<?= h($r['id']) ?>"><label>說明原因<input <?= (string)($formInputs['request_reject']['id'] ?? '') === (string)$r['id'] ? 'data-drawer-focus' : '' ?> name="response_note" required maxlength="250" value="<?= (string)($formInputs['request_reject']['id'] ?? '') === (string)$r['id'] ? h($formInputs['request_reject']['response_note'] ?? '') : '' ?>"></label><button class="button danger" type="submit">回覆不受理</button></form></details>
-            <?php else: ?><form class="panel-body operation-block" method="post" action="actions.php"><?php ui_fields('client_request_cancel'); ?><input type="hidden" name="id" value="<?= h($r['id']) ?>"><p class="form-note">倉儲人員處理前，可以取消申請。送出申請還不會改變庫存數量。</p><button class="button" type="submit">取消這筆申請</button></form><?php endif; ?>
+                <details class="request-reject panel-body" <?= (string)($formInputs['request_reject']['id'] ?? '') === (string)$r['id'] ? 'open' : '' ?>><summary>不受理申請</summary><form class="field-grid" method="post" action="actions.php"><?php ui_fields('request_reject'); ?><input type="hidden" name="id" value="<?= h($r['id']) ?>"><label>說明原因<input <?= (string)($formInputs['request_reject']['id'] ?? '') === (string)$r['id'] ? 'data-drawer-focus' : '' ?> name="response_note" required maxlength="250" value="<?= (string)($formInputs['request_reject']['id'] ?? '') === (string)$r['id'] ? h($formInputs['request_reject']['response_note'] ?? '') : '' ?>"></label><button class="button danger" type="submit">回覆不受理</button></form></details>
+            <?php else: ?><form class="panel-body operation-block" method="post" action="actions.php"><?php ui_fields('client_request_cancel'); ?><input type="hidden" name="id" value="<?= h($r['id']) ?>"><p class="form-note">倉儲處理前可取消申請。</p><button class="button" type="submit">取消申請</button></form><?php endif; ?>
         <?php endif; ?></section>
     <?php endforeach;
 }
@@ -60,7 +60,7 @@ function ui_lot_details(array $lots, array $movements): void {
     <section class="panel" id="lot-<?= h($lot['id']) ?>" data-drawer>
         <?php ui_section('批次 #'.$lot['id']); ?>
         <div class="panel-body"><span class="eyebrow"><?= h($lot['warehouse_name']) ?> ／ <?= h($lot['section_name']) ?></span><h3 class="detail-name"><?= h($lot['goods_name']) ?></h3><p class="detail-quantity"><?= number_format((int)$lot['quantity']) ?> <small><?= h($lot['unit']) ?>在庫</small></p><p class="muted">到倉日 <?= h($lot['arrival_date']) ?></p>
-        <h3 class="timeline-heading">這一批的收發紀錄</h3><ol class="lot-timeline">
+        <h3 class="timeline-heading">收發紀錄</h3><ol class="lot-timeline">
         <?php foreach ($movements as $movement): if ((int)$movement['stock_id'] !== (int)$lot['id']) continue; ?>
             <li><span class="timeline-dot <?= $movement['type'] === 'in' ? 'incoming' : 'outgoing' ?>" aria-hidden="true"><?= $movement['type'] === 'in' ? '↙' : '↗' ?></span><div><strong><?= $movement['type'] === 'in' ? '入庫' : '出庫' ?> <?= number_format((int)$movement['quantity']) ?> <?= h($movement['unit']) ?></strong><small class="record-sub"><?= h($movement['moved_at']) ?></small></div></li>
         <?php endforeach; ?></ol></div>
@@ -70,7 +70,7 @@ function ui_lot_details(array $lots, array $movements): void {
 
 function ui_activity_rail(array $movements): void { ?>
     <aside class="activity-rail"><div class="rail-heading"><h2>最近收發</h2><a href="?view=movements">全部 →</a></div>
-    <?php if (!$movements): ?><p class="muted">完成第一筆收發後，紀錄會列在這裡。</p><?php endif; ?>
+    <?php if (!$movements): ?><p class="muted">尚無收發紀錄。</p><?php endif; ?>
     <ol class="activity-feed"><?php foreach (array_slice($movements, 0, 5) as $m): ?><li><div class="activity-meta"><span class="direction <?= $m['type'] === 'in' ? 'incoming' : 'outgoing' ?>"><?= $m['type'] === 'in' ? '↙ 入庫' : '↗ 出庫' ?></span><time><?= h(substr($m['moved_at'], 5, 11)) ?></time></div><strong><?= h($m['goods_name']) ?></strong><div class="activity-bottom"><span><?= h($m['warehouse_name']) ?>／<?= h($m['section_name']) ?></span><b><?= number_format((int)$m['quantity']) ?> <?= h($m['unit']) ?></b></div></li><?php endforeach; ?></ol></aside>
 <?php }
 
@@ -78,11 +78,15 @@ function ui_workbench(array $data, array $requests, bool $employee): void {
     $pending = array_values(array_filter($requests, fn($r) => $r['status'] === 'pending'));
     $positive = array_filter($data['inventory'], fn($r) => (int)$r['quantity'] > 0);
     ?>
-    <div class="work-context"><span><b><?= count($pending) ?></b> 筆申請待處理</span><span><b><?= count($positive) ?></b> 批在庫</span><a href="?view=goods"><?= count($data['goods']) ?> 個貨物品項 →</a></div>
+    <div class="work-context">
+        <a class="context-stat" href="?view=requests"><span>待處理申請</span><b><?= count($pending) ?> <small>筆</small></b></a>
+        <a class="context-stat" href="?view=inventory"><span>在庫批次</span><b><?= count($positive) ?> <small>批</small></b></a>
+        <a class="context-stat" href="?view=goods"><span>貨物品項</span><b><?= count($data['goods']) ?> <small>項</small></b></a>
+    </div>
     <div class="workbench-grid"><div>
-        <?php if ($employee && !$pending): ?><div class="queue-clear"><span aria-hidden="true">✓</span><span>目前沒有待處理申請</span><a href="?view=requests">查看申請紀錄 →</a></div>
+        <?php if (($employee && !$pending) || (!$employee && !$requests)): ?><div class="queue-clear"><span><?= $employee ? '目前沒有待處理申請' : '尚無收發申請' ?></span><a href="?view=requests">查看申請 →</a></div>
         <?php else: ui_request_list(array_slice($employee ? $pending : $requests, 0, 5), $employee, true); endif; ?>
-        <section class="panel"><div class="panel-head"><div><h2><?= $employee ? '查找庫存' : '我的庫存' ?></h2><p>點選貨物，查看這一批的完整收發紀錄。</p></div><a class="text-link" href="?view=inventory">全部批次 →</a></div>
+        <section class="panel"><div class="panel-head"><div><h2><?= $employee ? '查找庫存' : '我的庫存' ?></h2></div><a class="text-link" href="?view=inventory">全部批次 →</a></div>
             <?php ui_search('inventory', '', '找貨名、批號或儲區'); ui_inventory(array_slice(array_values($positive), 0, 5), $employee); ?>
         </section>
     </div><?php ui_activity_rail($data['movements']); ?></div>

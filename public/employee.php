@@ -7,13 +7,6 @@ $user = require_role('employee');
 $nav = ['overview' => '收發工作台', 'goods' => '貨物管理', 'inventory' => '庫存與收發', 'movements' => '進出貨紀錄', 'requests' => '客戶申請'];
 $view = ui_text('view');
 $view = isset($nav[$view]) ? $view : 'overview';
-$hints = [
-    'overview' => '先處理客戶申請，或查找本次要收發的貨物。',
-    'requests' => '確認實際收發後再完成申請，庫存與紀錄會一起更新。',
-    'goods' => '新增品項時請填寫所屬客戶和計量單位。貨物已有申請或入庫紀錄後，只能修改貨名。',
-    'inventory' => '入庫時先選貨物，再選客戶承租的儲區。出庫時請選擇要扣除數量的批次。',
-    'movements' => '按貨名、批號或儲區搜尋，可查到每次進出貨的時間、數量和承辦員工。',
-];
 $q = $view === 'overview' ? '' : ui_text('q');
 $warehouse = $view === 'inventory' ? ui_text('warehouse') : '';
 $warehouseId = $warehouse !== '' ? (ctype_digit($warehouse) ? (int)$warehouse : 0) : null;
@@ -37,12 +30,12 @@ if ($goodsLocked) {
     $goodsValues['client_id'] = $editing['client_id'];
     $goodsValues['unit'] = $editing['unit'];
 }
-ui_page($user, $nav, $view, $hints[$view]);
+ui_page($user, $nav, $view, '');
 if ($view === 'overview') ui_workbench($data, $requests, true);
 if ($view === 'goods'): ?>
     <section class="panel">
         <?php ui_section('貨物清單'); ui_search($view, $q, '輸入貨物或客戶名稱');
-        if (!$data['goods']): ui_no_records($q === '' ? '還沒有貨物，可在下方新增第一個品項。' : '找不到符合搜尋條件的貨物。'); else: ?>
+        if (!$data['goods']): ui_no_records($q === '' ? '尚無貨物品項。' : '找不到符合條件的貨物。'); else: ?>
         <div class="table-scroll" tabindex="0" role="region" aria-label="貨物清單"><table>
             <thead><tr><th scope="col">貨物編號</th><th scope="col">貨物名稱</th><th scope="col">所屬客戶</th><th scope="col">計量單位</th><th scope="col">操作</th></tr></thead>
             <tbody><?php foreach ($data['goods'] as $item): ?><tr>
@@ -54,12 +47,12 @@ if ($view === 'goods'): ?>
     <section class="panel" id="goods-form" data-drawer <?= $goodsInput || $editId !== '' ? 'data-open' : '' ?>>
         <?php ui_section($editId !== '' ? '編輯貨物' : '新增貨物');
         if ($editId !== '' && !$editing): ?>
-        <div class="panel-body"><p class="form-note">找不到這筆貨物，可能已被刪除。請從貨物清單重新選擇。</p><a class="text-link" href="?view=goods">返回貨物管理</a></div>
+        <div class="panel-body"><p class="form-note">找不到這項貨物。</p><a class="text-link" href="?view=goods">返回貨物管理</a></div>
         <?php else: ?>
         <form class="field-grid cols panel-body" method="post" action="actions.php">
             <?php ui_fields('goods_save'); ?>
             <input type="hidden" name="id" value="<?= h($editing['id'] ?? '') ?>">
-            <?php if ($goodsLocked): ?><p class="form-note" id="goods-lock-note">這項貨物已有申請或入庫紀錄，只能修改貨名。所屬客戶與計量單位已鎖定。</p><?php endif; ?>
+            <?php if ($goodsLocked): ?><p class="form-note" id="goods-lock-note">已有申請或入庫紀錄，僅可修改貨物名稱。</p><?php endif; ?>
             <label>貨物名稱<input name="name" required maxlength="100" value="<?= h($goodsValues['name'] ?? '') ?>"></label>
             <label>所屬客戶<select name="client_id" required <?= $goodsLocked ? 'disabled aria-describedby="goods-lock-note"' : '' ?>><option value="">選擇客戶</option>
                 <?php foreach ($goodsOptions['clients'] as $client): ?><option value="<?= h($client['id']) ?>" <?= (string)($goodsValues['client_id'] ?? '') === (string)$client['id'] ? 'selected' : '' ?>><?= h($client['name']) ?></option><?php endforeach; ?>
@@ -98,10 +91,10 @@ if ($view === 'inventory'):
             <?php foreach ($options['sections'] as $item): ?><option value="<?= h($item['id']) ?>" data-client="<?= h($item['client_id']) ?>" <?= (string)($inValues['section_id'] ?? '') === (string)$item['id'] ? 'selected' : '' ?>><?= h($item['warehouse_name']) ?> ／ <?= h($item['name']) ?></option><?php endforeach; ?>
             </select></label>
             <label>入庫數量<input type="number" name="quantity" id="in-quantity" required min="1" max="2147483647" step="1" inputmode="numeric" value="<?= h($inValues['quantity'] ?? '') ?>" aria-describedby="in-preview"></label>
-            <p class="form-preview" id="in-preview" aria-live="polite" aria-atomic="true">選擇貨物、儲區並填寫數量後，可在這裡確認入庫內容。</p>
+            <p class="form-preview" id="in-preview" aria-live="polite" aria-atomic="true">請選擇貨物與儲區。</p>
             <div><button class="button primary" type="submit">登記入庫</button></div>
         </form>
-    <?php else: ui_no_records(!$options['goods'] ? '請先到「貨物管理」新增品項。' : '目前還沒有可用的儲區。'); endif; ?></section>
+    <?php else: ui_no_records(!$options['goods'] ? '尚無貨物品項。' : '尚無可用儲區。'); endif; ?></section>
     <section class="panel" id="stock-out-form" data-drawer <?= $outValues ? 'data-open' : '' ?>><?php ui_section('出庫登記'); ?>
     <?php if ($available): ?>
         <form method="post" action="actions.php" class="field-grid panel-body">
@@ -110,11 +103,11 @@ if ($view === 'inventory'):
             <?php foreach ($available as $item): ?><option value="<?= h($item['id']) ?>" data-quantity="<?= h($item['quantity']) ?>" data-name="<?= h($item['goods_name']) ?>" data-unit="<?= h($item['unit']) ?>" data-location="<?= h($item['warehouse_name'] . '／' . $item['section_name']) ?>" <?= (string)($outValues['stock_id'] ?? '') === (string)$item['id'] ? 'selected' : '' ?>>#<?= h($item['id']) ?> <?= h($item['goods_name']) ?> ｜ <?= h($item['warehouse_name']) ?>／<?= h($item['section_name']) ?> ｜ 餘 <?= number_format((int)$item['quantity']) ?> <?= h($item['unit']) ?></option><?php endforeach; ?>
             </select></label>
             <label>出庫數量<input type="number" name="quantity" id="out-quantity" required min="1" max="2147483647" step="1" inputmode="numeric" value="<?= h($outValues['quantity'] ?? '') ?>" aria-describedby="out-preview"></label>
-            <p class="form-preview" id="out-preview" aria-live="polite" aria-atomic="true">選擇批次後，可查看目前庫存與出庫後的剩餘數量。</p>
+            <p class="form-preview" id="out-preview" aria-live="polite" aria-atomic="true">請選擇庫存批次。</p>
             <div><button type="submit" class="button primary">登記出庫</button></div>
         </form>
-    <?php else: ui_no_records('目前沒有庫存可供出貨。'); endif; ?></section></div>
-    <script src="assets/stock.js?v=20261126" defer></script>
+    <?php else: ui_no_records('尚無可出庫的貨物。'); endif; ?></section></div>
+    <script src="assets/stock.js?v=20261126d" defer></script>
 <?php endif;
 if ($view === 'movements'): ?>
     <section class="panel"><?php ui_section('進出貨明細', $view === 'overview' ? 'movements' : null);

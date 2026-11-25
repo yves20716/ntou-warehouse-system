@@ -17,7 +17,7 @@ if (goods && sections && inQuantity && inPreview) {
         inQuantity.setCustomValidity('');
         inQuantity.removeAttribute('aria-invalid');
         if (!goods.value) {
-            showPreview(inPreview, '請先選擇貨物，再選擇收貨儲區並填寫數量。');
+            showPreview(inPreview, '請選擇貨物與儲區。');
         } else if (![...sections.options].some((option) => option.value && !option.disabled)) {
             showPreview(inPreview, '這項貨物所屬客戶目前沒有承租儲區，無法登記入庫。', true);
         } else if (!sections.value) {
@@ -64,7 +64,7 @@ if (stock && outQuantity && outPreview) {
         outQuantity.setCustomValidity('');
         outQuantity.removeAttribute('aria-invalid');
         if (!stock.value) {
-            showPreview(outPreview, '請先選擇庫存批次，再填寫出庫數量。');
+            showPreview(outPreview, '請選擇庫存批次。');
             return;
         }
         const unit = batch.dataset.unit;

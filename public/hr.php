@@ -21,7 +21,7 @@ if ((string)($staffInput['id'] ?? '') !== (string)($editing['id'] ?? '')) {
     $staffInput = [];
 }
 $staffValues = array_replace($editing ?? [], $staffInput);
-ui_page($user, $nav, $view, $view === 'overview' ? '員工名冊按員工編號排列。點選「查看全部」可搜尋及管理完整名冊。' : '可按姓名或職務搜尋，點選「編輯」即可修改員工資料。');
+ui_page($user, $nav, $view, '');
 if ($view === 'overview') {
     $managerIds = array_unique(array_filter(array_column($employees, 'manager_id')));
     ui_stats([['員工人數', count($employees), '人'], ['職務種類', count(array_unique(array_column($employees, 'job_title'))), '種'], ['主管人數', count($managerIds), '人']]);
@@ -29,7 +29,7 @@ if ($view === 'overview') {
 ?>
 <section class="panel"><?php ui_section('員工名冊', $view === 'overview' ? 'staff' : null);
 if ($view === 'staff') ui_search($view, $q, '輸入員工姓名或職務');
-if (!$employees): ui_no_records($q === '' ? '員工名冊目前沒有資料。' : '找不到符合搜尋條件的員工。'); else: ?>
+if (!$employees): ui_no_records($q === '' ? '尚無員工資料。' : '找不到符合條件的員工。'); else: ?>
 <div class="table-scroll" tabindex="0" role="region" aria-label="員工名冊"><table>
     <thead><tr><th scope="col">員工編號</th><th scope="col">姓名</th><th scope="col">職務</th><th scope="col">時薪</th><th scope="col">直屬主管</th><th scope="col">操作</th></tr></thead>
     <tbody><?php foreach (($view === 'overview' ? array_slice($employees, 0, 6) : $employees) as $person): ?><tr>
@@ -40,7 +40,7 @@ if (!$employees): ui_no_records($q === '' ? '員工名冊目前沒有資料。' 
 <?php if ($view === 'staff'): ?>
     <section class="panel" id="staff-form" data-drawer <?= $staffInput || $editId !== '' ? 'data-open' : '' ?>><?php ui_section($editId !== '' ? '編輯員工資料' : '新增員工');
         if ($editId !== '' && !$editing): ?>
-        <div class="panel-body"><p class="form-note">找不到這位員工，可能已被刪除。請從員工名冊重新選擇。</p><a class="text-link" href="?view=staff">返回員工管理</a></div>
+        <div class="panel-body"><p class="form-note">找不到這位員工。</p><a class="text-link" href="?view=staff">返回員工管理</a></div>
         <?php else: ?>
         <form class="field-grid cols panel-body" method="post" action="actions.php">
             <?php ui_fields('employee_save'); ?><input type="hidden" name="id" value="<?= h($editing['id'] ?? '') ?>">

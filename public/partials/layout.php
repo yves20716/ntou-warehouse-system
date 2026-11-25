@@ -12,11 +12,11 @@ function ui_head(string $title): void { ?>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#152e30">
+    <meta name="theme-color" content="#1c2b45">
     <title><?= h($title) ?> ｜ NEXUS WMS</title>
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="assets/styles.css?v=20261126b">
-    <link rel="stylesheet" href="assets/workspace.css?v=20261126c">
+    <link rel="stylesheet" href="assets/styles.css?v=20261126d">
+    <link rel="stylesheet" href="assets/workspace.css?v=20261126d">
     <script src="assets/app.js?v=20261126b" defer></script>
     <script src="assets/table-tools.js?v=20261126b" defer></script>
     <script src="assets/workbench.js?v=20261126c" defer></script>
@@ -25,8 +25,20 @@ function ui_head(string $title): void { ?>
 <?php }
 
 function ui_brand(): void { ?>
-    <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>NEXUS <b>WMS</b></span></div>
+    <div class="brand"><svg class="brand-mark" aria-hidden="true" viewBox="0 0 32 32" fill="none"><path d="M4 10 16 3l12 7v13l-12 7-12-7V10Z" stroke="currentColor" stroke-width="2"/><path d="m4 10 12 7 12-7M16 17v13M10 6.5l12 7V20" stroke="currentColor" stroke-width="2"/></svg><span>NEXUS <b>WMS</b></span></div>
 <?php }
+
+function ui_nav_icon(string $key): void {
+    $paths = [
+        'overview' => '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+        'goods' => '<path d="m3 7 9-5 9 5v10l-9 5-9-5V7Zm0 0 9 5 9-5M12 12v10M7.5 4.5l9 5V15"/>',
+        'inventory' => '<path d="M3 21V7l9-5 9 5v14M1 21h22M7 21V11h10v10M7 16h10"/>',
+        'movements' => '<path d="M3 7h17m-4-4 4 4-4 4M21 17H4m4-4-4 4 4 4"/>',
+        'requests' => '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 15h6"/>',
+        'staff' => '<circle cx="9" cy="7" r="4"/><path d="M2 21v-2a7 7 0 0 1 14 0v2M17 3a4 4 0 0 1 0 8M22 21v-2a7 7 0 0 0-4-6"/>',
+    ];
+    echo '<svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'.($paths[$key] ?? $paths['overview']).'</svg>';
+}
 
 function ui_flash(): void {
     $flash = take_flash();
@@ -58,17 +70,17 @@ function ui_page(array $user, array $nav, string $view, string $subtitle): void 
         <div class="account"><span class="account-name"><?= h($user['display_name']) ?></span><form method="post" action="actions.php"><?php ui_fields('logout'); ?><button class="logout-button" type="submit">登出</button></form></div>
     </header>
     <nav class="workspace-nav" aria-label="<?= h($role) ?>導覽"><?php foreach ($nav as $key => $label): ?>
-        <a href="?view=<?= h($key) ?>" <?= $key === $view ? 'aria-current="page"' : '' ?>><?= h($label) ?></a>
+        <a href="?view=<?= h($key) ?>" <?= $key === $view ? 'aria-current="page"' : '' ?>><?php ui_nav_icon($key); ?><span><?= h($label) ?></span></a>
     <?php endforeach; ?></nav>
     <main id="main" class="main" data-view="<?= h($view) ?>">
-        <header class="page-heading"><div><h1><?= h($title) ?></h1><p><?= h($subtitle) ?></p></div>
+        <header class="page-heading"><div><h1><?= h($title) ?></h1><?php if ($subtitle !== ''): ?><p><?= h($subtitle) ?></p><?php endif; ?></div>
         <div class="heading-actions">
         <?php if ($user['role'] === 'employee'): ?>
-            <?php if ($view === 'goods'): ?><a class="button primary" href="?view=goods#goods-form">＋ 新增貨物</a>
-            <?php elseif ($view !== 'requests'): ?><a class="button" href="<?= $view === 'inventory' ? '#stock-out-form' : '?view=inventory#stock-out-form' ?>">登記出庫</a><a class="button primary" href="<?= $view === 'inventory' ? '#stock-in-form' : '?view=inventory#stock-in-form' ?>">＋ 登記入庫</a><?php endif; ?>
-        <?php elseif ($user['role'] === 'hr'): ?><a class="button primary" href="?view=staff#staff-form">＋ 新增員工</a>
-        <?php elseif ($view === 'goods'): ?><a class="button primary" href="?view=goods#client-goods-form">＋ 建立品項</a>
-        <?php else: ?><a class="button" href="?view=inventory">選貨出庫</a><a class="button primary" href="?view=requests#request-in-form">＋ 申請入庫</a><?php endif; ?>
+            <?php if ($view === 'goods'): ?><a class="button primary" href="?view=goods#goods-form">新增貨物</a>
+            <?php elseif ($view !== 'requests'): ?><a class="button" href="<?= $view === 'inventory' ? '#stock-out-form' : '?view=inventory#stock-out-form' ?>">登記出庫</a><a class="button primary" href="<?= $view === 'inventory' ? '#stock-in-form' : '?view=inventory#stock-in-form' ?>">登記入庫</a><?php endif; ?>
+        <?php elseif ($user['role'] === 'hr'): ?><a class="button primary" href="?view=staff#staff-form">新增員工</a>
+        <?php elseif ($view === 'goods'): ?><a class="button primary" href="?view=goods#client-goods-form">建立品項</a>
+        <?php else: ?><a class="button" href="?view=inventory">選貨出庫</a><a class="button primary" href="?view=requests#request-in-form">申請入庫</a><?php endif; ?>
         </div></header>
         <?php ui_flash();
 }
