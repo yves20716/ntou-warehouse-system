@@ -1,5 +1,23 @@
 # 回歸測試
 
+## Docker 安裝驗證
+
+[GitHub Actions](https://github.com/yves20716/ntou-warehouse-system/actions/workflows/demo.yml) 會在乾淨的 Ubuntu 24.04 amd64 與 arm64 主機上，分別驗證本機示範版與正式部署版。也可從該頁按 **Run workflow** 重新執行。
+
+檢查內容包括空資料卷建表、示範資料筆數、四個帳號登入、客戶申請入庫 10／倉儲確認、出庫 3 後餘量為 7、取消及未受理、客戶隔離、人資新增修改刪除，以及關閉再啟動後資料是否完整保留。正式部署版另外測 Apache、Caddy 本機 HTTPS 憑證、Secure Cookie、私人檔案無法存取、CLI 建帳號、限制資料庫權限、備份還原及舊版 migration。
+
+`docker_verify.py` 負責啟動與檢查容器，僅允許在可拋棄的 GitHub Actions 主機上執行。`docker_smoke.py` 則透過實際 HTTP 表單測試操作；它會新增有識別碼的貨物、申請、批次與紀錄，**只在另外建立的測試環境使用**。
+
+```sh
+python3 tests/docker_smoke.py --base http://127.0.0.1:8080 --mode seeded --output .local/docker-seeded.json
+# 關閉再啟動容器後，只讀取上一次的測試資料：
+python3 tests/docker_smoke.py --base http://127.0.0.1:8080 --mode seeded --output .local/docker-seeded.json --verify-only
+```
+
+正式部署測試使用 `https://localhost` 和 Caddy 的本機 CA，驗證過程不關閉憑證檢查。這能測試容器的 HTTPS 設定；自己的公開網域仍須完成 DNS、80／443 連通與公開憑證簽發。
+
+## 獨立 PHP／MySQL 測試
+
 請另建 `warehouse_qa` 資料庫，匯入 `database/01-schema.sql` 和 `database/02-seed.sql`，並使用只具該資料庫權限的帳號。不要連到平常展示或使用中的資料庫。
 
 依主 README 設定資料庫環境變數，將 `DB_NAME` 設為 `warehouse_qa`、`DB_HOST` 設為 `127.0.0.1`，再啟動獨立的測試網站：

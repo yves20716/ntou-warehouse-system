@@ -1,18 +1,47 @@
-name: Warehouse demo
+name: Docker installation and workflows
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**/*.md']
+  pull_request:
+    paths-ignore: ['**/*.md']
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   compose:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - run: docker compose up --build --wait --wait-timeout 180
-      - name: Check PHP syntax
-        run: docker compose exec -T web sh -c 'find app public -name "*.php" -print0 | xargs -0 -n1 php -l'
-      - name: Check the four demonstration accounts
-        run: python3 tests/demo_accounts.py
+      - name: Fetch this exact revision into a clean checkout
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - name: Record the Docker environment
+        run: |
+          uname -m
+          docker version
+          docker compose version
+      - name: Build from empty volumes and exercise the README workflow
+        run: python3 tests/docker_verify.py seeded
+      - name: Verify Apache, MySQL, HTTPS, provisioning, backup and upgrade
+        run: python3 tests/docker_verify.py production
+      - name: Record images and container state
+        if: always()
+        run: |
+          docker image ls --digests
+          docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+      - name: Stop this runner's test services without deleting data volumes
+        if: always()
+        run: |
+          docker compose stop || true
+          if [ -f .env.production ]; then ./bin/production.sh stop || true; fi
